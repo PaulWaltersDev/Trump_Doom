@@ -1,0 +1,73 @@
+name: Test & Deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Syntax check (extract JS from index.html)
+        run: |
+          awk '/<script>/{f=1;next}/<\/script>/{f=0}f' index.html > /tmp/game.js
+          node --check /tmp/game.js
+
+      - name: Start local server
+        run: |
+          node server.js &
+          sleep 1
+
+      - name: In-engine self-test (headless Chromium, 14 assertions)
+        run: |
+          # google-chrome is preinstalled on GitHub-hosted ubuntu runners
+          google-chrome --headless=new --disable-gpu --no-sandbox \
+            --enable-logging=stderr --virtual-time-budget=12000 \
+            --screenshot=/tmp/selftest.png \
+            "http://localhost:8080/?selftest" 2>&1 | tee /tmp/selftest.log
+          grep -q 'SELFTEST' /tmp/selftest.log || { echo "Self-test did not run"; exit 1; }
+          if grep -q '"FAIL' /tmp/selftest.log; then
+            echo "Self-test failures:"
+            grep -o '"FAIL [^"]*"' /tmp/selftest.log
+            exit 1
+          fi
+          echo "All self-test assertions passed"
+
+      - name: Smoke-test gameplay screenshot (?walk = sprint with head-bob)
+        run: |
+          google-chrome --headless=new --disable-gpu --no-sandbox \
+            --virtual-time-budget=3500 \
+            --screenshot=/tmp/walk.png \
+            "http://localhost:8080/?walk" 2>/dev/null
+          test -s /tmp/walk.png && echo "Walk frame rendered OK"
+
+  deploy:
+    name: Deploy to Vercel (production)
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Vercel CLI
+        run: npm i -g vercel@latest
+
+      - name: Link Vercel project
+        run: |
+          mkdir -p .vercel
+          echo '{"orgId":"${{ secrets.VERCEL_ORG_ID }}","projectId":"${{ secrets.VERCEL_PROJECT_ID }}"}' > .vercel/project.json
+
+      - name: Deploy (static site, no build step)
+        run: vercel deploy --prod --yes --token=${{ secrets.VERCEL_TOKEN }}

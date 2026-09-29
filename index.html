@@ -630,58 +630,53 @@ function weaponCanvas(kind, firing){
   return c;
 }
 /* ---------------- map ---------------- */
-const T_EMPTY=0, T_STONE=1, T_BRICK=2, T_MOSS=3, T_TECH=4, T_DOOR=5, T_DOORL=6, T_SECRET=7, T_EXIT=8, T_PILLAR=9;
-// texture index per tile (into wallTex[])
-const WALL_TEXIDX = {1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 7:0, 8:6, 9:7};
+const T_EMPTY=0, T_STONE=1, T_BRICK=2, T_MOSS=3, T_TECH=4, T_DOOR=5, T_DOORL=6, T_SECRET=7, T_EXIT=8,
+      T_PILLAR=9, T_WOOD=10, T_WINDOW=11, T_ROCK=12, T_METAL=13;
 
-const MAPW = 48, MAPH = 48;
-let grid = null;
-let doors = new Map();          // key = y*MAPW+x -> door obj
+let MAPW = 48, MAPH = 48;
+let grid = null;        // wall tiles
+let fgrid = null;       // floor tex index per cell
+let cgrid = null;       // ceil tex index per cell (-1 = open sky)
+let doors = new Map();  // key = y*MAPW+x -> door obj
+let props = [];         // scenery billboards (trees, wells, ships...) — block movement
+let stairLinks = new Map(); // teleport pads (office multi-floor): tileIdx -> [tx,ty]
 let secretTotalTiles = 0;
+let curLevel = 0, LVL = null;   // active level definition
+
+// map-string chars -> tiles ('.'/'O'/'~'/','/'f' etc. are open cells; floor/ceil variants
+// come from the level's fp/cp char tables; cgrid -1 = sky)
+const CHARTILE = { '#':T_STONE, 'b':T_BRICK, 'm':T_MOSS, 't':T_TECH, '+':T_DOOR, 'L':T_DOORL,
+  'S':T_SECRET, 'X':T_EXIT, 'P':T_PILLAR, 'w':T_WOOD, 'v':T_WINDOW, 'r':T_ROCK, 'M':T_METAL };
+const WALLCHARS = new Set(Object.keys(CHARTILE));
 
 function tget(x, y){ return grid[y * MAPW + x]; }
 function tset(x, y, v){ grid[y * MAPW + x] = v; }
-function carve(x, y, w, h){
-  for (let yy = y; yy < y + h; yy++)
-    for (let xx = x; xx < x + w; xx++) grid[yy * MAPW + xx] = T_EMPTY;
-}
 function isDoorTile(t){ return t === T_DOOR || t === T_DOORL || t === T_SECRET; }
 
 function buildMap(){
-  grid = new Uint8Array(MAPW * MAPH).fill(T_STONE);
-  doors = new Map();
+  const def = LVL;
+  MAPW = def.map[0].length; MAPH = def.map.length;
+  grid = new Uint8Array(MAPW * MAPH);
+  fgrid = new Uint8Array(MAPW * MAPH);
+  cgrid = new Int16Array(MAPW * MAPH);
+  doors = new Map(); props = []; stairLinks = new Map();
   secretTotalTiles = 0;
-  // rooms
-  carve(4, 40, 8, 6);    // A: start chamber
-  carve(2, 26, 10, 8);   // B: armory
-  carve(18, 24, 18, 21); // C: great pillar hall
-  carve(18, 8, 21, 8);   // D: prison cells
-  carve(38, 30, 8, 8);   // E: key vault
-  carve(40, 14, 6, 6);   // F: secret cache
-  carve(8, 4, 10, 8);    // G: exit chamber
-  // corridors
-  carve(5, 34, 2, 6);    // A-B
-  carve(12, 42, 7, 2);   // A-C
-  carve(12, 29, 7, 2);   // B-C
-  carve(26, 16, 2, 8);   // C-D
-  carve(36, 32, 2, 2);   // C-E
-  // pillars in the great hall
-  for (const [px_, py_] of [[22,29],[27,29],[32,29],[22,35],[27,35],[32,35],[22,41],[32,41]])
-    tset(px_, py_, T_PILLAR);
-  // prison cell dividers
-  for (const cx of [23, 29, 35]) for (let y = 8; y <= 11; y++) tset(cx, y, T_BRICK);
-  // doors
-  tset(26, 19, T_DOOR);  tset(27, 19, T_DOOR);       // hall <-> cells
-  tset(17, 8, T_DOORL);  tset(17, 9, T_DOORL);       // locked: cells <-> exit chamber
-  tset(17, 10, T_STONE); tset(17, 11, T_STONE);      // seal the rest of the shared wall
-  tset(39, 14, T_SECRET); tset(39, 15, T_SECRET);    // secret wall -> cache
-  tset(12, 3, T_EXIT);                               // exit switch (north wall of G)
-  // build door objects (group orthogonally-adjacent door tiles of the same type)
-  for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++) {
-    const t = tget(x, y);
-    if (isDoorTile(t)) {
-      doors.set(y * MAPW + x, { x, y, type: t, open: 0, state: 0, timer: 0, used: false });
-      if (t === T_SECRET) secretTotalTiles++;
+  for (let y = 0; y < MAPH; y++) {
+    const row = def.map[y];
+    for (let x = 0; x < MAPW; x++) {
+      const ch = x < row.length ? row[x] : '#';
+      const wc = CHARTILE[ch];
+      const i = y * MAPW + x;
+      if (wc !== undefined) { grid[i] = wc; fgrid[i] = def.fDefault; cgrid[i] = def.cDefault; }
+      else { // open cell: floor/ceiling from char tables
+        grid[i] = T_EMPTY;
+        fgrid[i] = def.fp[ch] !== undefined ? def.fp[ch] : def.fDefault;
+        cgrid[i] = def.cp[ch] !== undefined ? def.cp[ch] : def.cDefault;
+      }
+      if (wc === T_DOOR || wc === T_DOORL || wc === T_SECRET) {
+        doors.set(i, { x, y, type: wc, open: 0, state: 0, timer: 0, used: false });
+        if (wc === T_SECRET) secretTotalTiles++;
+      }
     }
   }
 }
