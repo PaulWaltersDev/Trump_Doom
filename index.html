@@ -477,6 +477,44 @@ function tableTex(){
     speckle(g, 160, 'rgba(0,0,0,0.15)', 'rgba(255,255,255,0.05)');
   });
 }
+function elevDoorTex(){   // elevator entrance: brushed steel double doors, glowing up-arrows
+  return texCanvas(g => {
+    g.fillStyle = '#2a2e34'; g.fillRect(0, 0, 64, 64); // frame
+    g.fillStyle = '#0f1013'; g.fillRect(4, 4, 56, 56); // doors
+    g.fillStyle = '#3d434c'; g.fillRect(6, 6, 25, 52); g.fillRect(33, 6, 25, 52);
+    for (let y = 6; y < 58; y += 8) { g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(6, y, 52, 1); }
+    g.fillStyle = '#1a1d22'; g.fillRect(31, 4, 2, 56); // door split
+    g.fillStyle = '#0f1013'; g.fillRect(4, 24, 56, 2); // header
+    g.fillStyle = '#ffd24a';                           // glowing chevron arrows
+    for (const yy of [30, 40]) {
+      g.beginPath(); g.moveTo(18, yy + 6); g.lineTo(23, yy); g.lineTo(28, yy + 6);
+      g.lineTo(28, yy + 3); g.lineTo(23, yy - 2); g.lineTo(18, yy + 3); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(36, yy + 6); g.lineTo(41, yy); g.lineTo(46, yy + 6);
+      g.lineTo(46, yy + 3); g.lineTo(41, yy - 2); g.lineTo(36, yy + 3); g.closePath(); g.fill();
+    }
+    g.fillStyle = '#ffe89a'; g.fillRect(10, 2, 44, 2); // lit lintel
+    speckle(g, 80, 'rgba(0,0,0,0.2)', 'rgba(255,255,255,0.05)');
+  });
+}
+function liftTex(){       // elevator pad floor: steel plate, glowing ring, arrows in
+  return texCanvas(g => {
+    g.fillStyle = '#3a4048'; g.fillRect(0, 0, 64, 64); // steel plate
+    g.fillStyle = '#2e333a'; g.fillRect(2, 2, 60, 60);
+    speckle(g, 200, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.07)');
+    g.strokeStyle = '#ffd24a'; g.lineWidth = 3;        // glowing rim
+    g.strokeRect(4, 4, 56, 56);
+    g.strokeStyle = 'rgba(255,210,74,0.55)'; g.lineWidth = 2;
+    g.strokeRect(10, 10, 44, 44);
+    g.fillStyle = '#ffd24a';                           // four arrows pointing inward
+    for (const [dx, dy, rot] of [[32, 8, 0], [56, 32, Math.PI / 2], [32, 56, Math.PI], [8, 32, -Math.PI / 2]]) {
+      g.save(); g.translate(dx, dy); g.rotate(rot);
+      g.beginPath(); g.moveTo(-4, -2); g.lineTo(0, 4); g.lineTo(4, -2); g.lineTo(0, 0); g.closePath(); g.fill();
+      g.restore();
+    }
+    g.strokeStyle = 'rgba(255,232,154,0.9)'; g.lineWidth = 2;   // center cross-hair glow
+    g.beginPath(); g.arc(32, 32, 6, 0, TAU); g.stroke();
+  });
+}
 function deskTex(){
   return texCanvas(g => {
     g.fillStyle = '#6a7078'; g.fillRect(0, 0, 64, 64);
@@ -1077,7 +1115,7 @@ function weaponCanvas(kind, firing){
 }
 /* ---------------- map ---------------- */
 const T_EMPTY=0, T_STONE=1, T_BRICK=2, T_MOSS=3, T_TECH=4, T_DOOR=5, T_DOORL=6, T_SECRET=7, T_EXIT=8,
-      T_PILLAR=9, T_WOOD=10, T_WINDOW=11, T_ROCK=12, T_METAL=13;
+      T_PILLAR=9, T_WOOD=10, T_WINDOW=11, T_ROCK=12, T_METAL=13, T_LIFT=14;
 
 let MAPW = 48, MAPH = 48;
 let grid = null;        // wall tiles
@@ -1094,7 +1132,8 @@ let qPos = null;                // ?pos=x,y dev hook: forced spawn position
 // map-string chars -> tiles ('.'/'O'/'~'/','/'f' etc. are open cells; floor/ceil variants
 // come from the level's fp/cp char tables; cgrid -1 = sky)
 const CHARTILE = { '#':T_STONE, 'b':T_BRICK, 'm':T_MOSS, 't':T_TECH, '+':T_DOOR, 'L':T_DOORL,
-  'S':T_SECRET, 'X':T_EXIT, 'P':T_PILLAR, 'w':T_WOOD, 'v':T_WINDOW, 'r':T_ROCK, 'M':T_METAL };
+  'S':T_SECRET, 'X':T_EXIT, 'P':T_PILLAR, 'w':T_WOOD, 'v':T_WINDOW, 'r':T_ROCK, 'M':T_METAL,
+  'E':T_LIFT };
 const WALLCHARS = new Set(Object.keys(CHARTILE));
 
 function tget(x, y){ return grid[y * MAPW + x]; }
@@ -1341,12 +1380,12 @@ const LEVELS = [
     name: 'TOWER OF POWER',
     fDefault: 0, cDefault: 0,
     // floors: 0 glossy 1 carpet 2 canteen tile 3 lobby marble ; ceils: 0 office 1 lobby
-    fp: { '.':0, ',':1, '~':2, 'f':3 },
-    cp: { '.':0, ',':0, '~':0, 'f':1 },
+    fp: { '.':0, ',':1, '~':2, 'f':3, 'e':4 },
+    cp: { '.':0, ',':0, '~':0, 'f':1, 'e':0 },
     spawn: [24, 43, -Math.PI / 2], par: 180, ambient: 1.12, sky: null,
     texOf: () => ({ 1:TEX.stone, 4:TEX.tech, 5:TEX.door, 6:TEX.doorL, 7:TEX.tech,
-      8:TEX.exit, 10:TEX.table, 11:TEX.window, 13:TEX.desk }),
-    floorTexs: () => [TEX.gloss, TEX.carpet, TEX.ctile, TEX.marble],
+      8:TEX.exit, 10:TEX.table, 11:TEX.window, 13:TEX.desk, 14:TEX.elevDoor }),
+    floorTexs: () => [TEX.gloss, TEX.carpet, TEX.ctile, TEX.marble, TEX.lift],
     ceilTexs: () => [TEX.oceil, TEX.lceil],
     intro: 'THREE ANGRY DEPARTMENTS. TAKE THE ELEVATOR TO THE EXEC SUITE.',
     map: [
@@ -1372,10 +1411,10 @@ const LEVELS = [
       "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
       "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
       "tv................................,,,,,,,,,,,,vt",
-      "tv............................................vt",
-      "tttttttttttttttttttttttttttttttttttttttttttttttt",
-      "tttttttttttttttttttttttttttttttttttttttttttttttt",
-      "tv............................................vt",
+      "tv......................e.....................vt",
+      "ttttttttttttttttttttttttEttttttttttttttttttttttt",
+      "ttttttttttttttttttttttttEttttttttttttttttttttttt",
+      "tv......................e.....................vt",
       "tv.,,,,,,,,,,,,..................~~~~~~~~~~~~~vt",
       "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
       "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
@@ -1398,6 +1437,7 @@ const LEVELS = [
       "tv.............ffffffffffffffffff.............vt",
       "ttvvvvvvvvvvvvvvvvvvvvvtttvvvvvvvvvvvvvvvvvvvvtt",
       "tttttttttttttttttttttttttttttttttttttttttttttttt",
+
     ],
     things: [
       // floor 1: open office (west, carpet pods)
@@ -1615,6 +1655,7 @@ function buildAssets(){
   TEX.wood = woodTex(false); TEX.woodDark = woodTex(true); TEX.rock = rockTex();
   TEX.metal = metalTex(); TEX.hull = TEX.metal; TEX.window = windowTex();
   TEX.table = tableTex(); TEX.desk = deskTex(); TEX.techDark = techDarkTex();
+  TEX.elevDoor = elevDoorTex(); TEX.lift = liftTex();
   TEX.floor = floorTexG.data; TEX.ceil = ceilTexG.data;
   TEX.grass = grassTex(); TEX.dirt = dirtTex(); TEX.water = waterTex(); TEX.planks = planksTex();
   TEX.gloss = glossTex(); TEX.carpet = carpetTex(); TEX.ctile = ctileTex(); TEX.marble = marbleTex();
@@ -2358,6 +2399,7 @@ function drawAutomap(){
     let col = '#8a8a98';
     if (t === T_DOOR) col = '#c9a227';
     else if (t === T_DOORL) col = '#c0272d';
+    else if (t === T_LIFT) col = '#ffd24a';
     else if (t === T_SECRET) col = doorAt(x, y).used ? '#e050e0' : '#4a4a52';
     else if (t === T_EXIT) col = '#3dff70';
     ctx.fillStyle = col;
