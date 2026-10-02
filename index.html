@@ -382,6 +382,381 @@ function ceilTexGen(){
 const wallTexNames = ['STONE','BRICK','MOSS','TECH','DOOR','DOORL','EXIT','PILLAR'];
 const wallTex = []; // filled in buildAssets()
 const floorTexG = { data: null }, ceilTexG = { data: null };
+const TEX = {};    // named texture registry — per-level texOf()/floorTexs()/ceilTexs() reference these
+
+/* ---- new wall textures (per-level) ---- */
+function woodTex(dark){
+  return texCanvas(g => {
+    g.fillStyle = dark ? '#3a2a1c' : '#5c4128'; g.fillRect(0, 0, 64, 64);
+    for (let y = 0; y < 64; y += 16) {                 // horizontal planks
+      g.fillStyle = dark ? '#46331f' : '#6b4c2e'; g.fillRect(0, y, 64, 15);
+      g.fillStyle = dark ? '#241a10' : '#3a2a18'; g.fillRect(0, y + 15, 64, 1);
+      for (let i = 0; i < 9; i++) {                    // grain
+        g.fillStyle = 'rgba(0,0,0,0.18)';
+        g.fillRect((srnd() * 50) | 0, y + 2 + ((srnd() * 12) | 0), 8 + ((srnd() * 12) | 0), 1);
+      }
+      g.fillStyle = '#1c1712';
+      g.fillRect(3, y + 7, 2, 2); g.fillRect(59, y + 7, 2, 2);
+    }
+    speckle(g, 220, 'rgba(0,0,0,0.16)', 'rgba(255,255,255,0.045)');
+  });
+}
+function rockTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#565048'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 60; i++) {                     // craggy facets
+      g.fillStyle = srnd() < 0.5 ? 'rgba(30,26,22,0.25)' : 'rgba(200,190,175,0.10)';
+      g.fillRect((srnd() * 60) | 0, (srnd() * 60) | 0, 6 + ((srnd() * 14) | 0), 4 + ((srnd() * 10) | 0));
+    }
+    g.fillStyle = 'rgba(20,16,12,0.35)';
+    for (let i = 0; i < 14; i++) g.fillRect((srnd() * 60) | 0, (srnd() * 60) | 0, 2 + ((srnd() * 4) | 0), 1);
+    speckle(g, 450, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.05)');
+  });
+}
+function metalTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#8d9299'; g.fillRect(0, 0, 64, 64);
+    for (let y = 0; y < 64; y += 8) {                  // riveted panels
+      g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(0, y, 64, 1);
+      const off = ((y / 8) | 0) % 2 ? 16 : 0;
+      for (let x = -16; x < 64; x += 32) g.fillRect(x + off, y, 1, 8);
+    }
+    g.fillStyle = '#b8bec6';
+    for (const y of [4, 12, 20, 28, 36, 44, 52, 60]) for (const x of [4, 36]) g.fillRect(x + (y % 16 ? 0 : 8), y - 4, 2, 2);
+    g.fillStyle = '#c0272d'; g.fillRect(24, 26, 14, 3);
+    g.fillStyle = '#e8e8e8'; g.fillRect(24, 25, 14, 1);
+    speckle(g, 300, 'rgba(0,0,0,0.10)', 'rgba(255,255,255,0.07)');
+  });
+}
+function techDarkTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#1c1e24'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#14161a';
+    for (const y of [0, 21, 42]) g.fillRect(0, y, 64, 2);
+    g.fillStyle = '#2a2e38';
+    for (const y of [4, 25, 46]) g.fillRect(4, y, 56, 12);
+    g.fillStyle = '#e8a020';
+    for (const y of [8, 29, 50]) g.fillRect(8, y, 4, 4);
+    speckle(g, 300, 'rgba(0,0,0,0.3)', 'rgba(255,255,255,0.05)');
+  });
+}
+function windowTex(){  // office window wall: dusk city skyline + sea beyond
+  return texCanvas(g => {
+    for (let y = 0; y < 40; y++) {                     // dusk sky
+      const t = y / 40;
+      g.fillStyle = `rgb(${20 + t * 60 | 0},${26 + t * 66 | 0},${52 + t * 84 | 0})`;
+      g.fillRect(0, y, 64, 1);
+    }
+    for (let y = 40; y < 64; y++) {                    // sea
+      const t = (y - 40) / 24;
+      g.fillStyle = `rgb(${8 + t * 20 | 0},${30 + t * 40 | 0},${58 + t * 52 | 0})`;
+      g.fillRect(0, y, 64, 1);
+    }
+    g.fillStyle = 'rgba(255,240,190,0.35)';            // moon glint
+    g.fillRect(44, 41, 8, 1); g.fillRect(46, 43, 5, 1); g.fillRect(47, 46, 3, 1);
+    g.fillStyle = '#0c0e16';                           // skyline
+    for (const [x, w, h] of [[2, 9, 18], [12, 6, 26], [19, 10, 14], [30, 7, 22], [38, 9, 17], [48, 12, 24]])
+      g.fillRect(x, 40 - h, w, h);
+    g.fillStyle = '#ffd970';                           // lit windows
+    for (const [x, w, h] of [[2, 9, 18], [12, 6, 26], [19, 10, 14], [30, 7, 22], [38, 9, 17], [48, 12, 24]])
+      for (let yy = 40 - h + 2; yy < 38; yy += 4) for (let xx = x + 1; xx < x + w - 1; xx += 3)
+        if (srnd() < 0.5) g.fillRect(xx, yy, 1, 2);
+    g.fillStyle = '#22262e';                           // window frame
+    g.fillRect(0, 0, 3, 64); g.fillRect(61, 0, 3, 64); g.fillRect(0, 0, 64, 3); g.fillRect(0, 61, 64, 3);
+    g.fillStyle = 'rgba(255,255,255,0.10)'; g.fillRect(6, 4, 2, 56);
+  });
+}
+function tableTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#181820'; g.fillRect(0, 0, 64, 64); // dark void between tables
+    g.fillStyle = '#b08a54'; g.fillRect(0, 6, 64, 12); // tabletop
+    g.fillStyle = 'rgba(0,0,0,0.18)'; g.fillRect(0, 6, 64, 2);
+    g.fillStyle = '#8a683a'; g.fillRect(0, 16, 64, 2);
+    g.fillStyle = '#5c4a30'; g.fillRect(6, 18, 7, 46); g.fillRect(51, 18, 7, 46); // legs
+    g.fillStyle = 'rgba(255,220,150,0.08)'; g.fillRect(0, 8, 64, 1);
+    speckle(g, 160, 'rgba(0,0,0,0.15)', 'rgba(255,255,255,0.05)');
+  });
+}
+function elevDoorTex(){   // elevator entrance: brushed steel double doors, glowing up-arrows
+  return texCanvas(g => {
+    g.fillStyle = '#2a2e34'; g.fillRect(0, 0, 64, 64); // frame
+    g.fillStyle = '#0f1013'; g.fillRect(4, 4, 56, 56); // doors
+    g.fillStyle = '#3d434c'; g.fillRect(6, 6, 25, 52); g.fillRect(33, 6, 25, 52);
+    for (let y = 6; y < 58; y += 8) { g.fillStyle = 'rgba(255,255,255,0.06)'; g.fillRect(6, y, 52, 1); }
+    g.fillStyle = '#1a1d22'; g.fillRect(31, 4, 2, 56); // door split
+    g.fillStyle = '#0f1013'; g.fillRect(4, 24, 56, 2); // header
+    g.fillStyle = '#ffd24a';                           // glowing chevron arrows
+    for (const yy of [30, 40]) {
+      g.beginPath(); g.moveTo(18, yy + 6); g.lineTo(23, yy); g.lineTo(28, yy + 6);
+      g.lineTo(28, yy + 3); g.lineTo(23, yy - 2); g.lineTo(18, yy + 3); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(36, yy + 6); g.lineTo(41, yy); g.lineTo(46, yy + 6);
+      g.lineTo(46, yy + 3); g.lineTo(41, yy - 2); g.lineTo(36, yy + 3); g.closePath(); g.fill();
+    }
+    g.fillStyle = '#ffe89a'; g.fillRect(10, 2, 44, 2); // lit lintel
+    speckle(g, 80, 'rgba(0,0,0,0.2)', 'rgba(255,255,255,0.05)');
+  });
+}
+function liftTex(){       // elevator pad floor: steel plate, glowing ring, arrows in
+  return texCanvas(g => {
+    g.fillStyle = '#3a4048'; g.fillRect(0, 0, 64, 64); // steel plate
+    g.fillStyle = '#2e333a'; g.fillRect(2, 2, 60, 60);
+    speckle(g, 200, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.07)');
+    g.strokeStyle = '#ffd24a'; g.lineWidth = 3;        // glowing rim
+    g.strokeRect(4, 4, 56, 56);
+    g.strokeStyle = 'rgba(255,210,74,0.55)'; g.lineWidth = 2;
+    g.strokeRect(10, 10, 44, 44);
+    g.fillStyle = '#ffd24a';                           // four arrows pointing inward
+    for (const [dx, dy, rot] of [[32, 8, 0], [56, 32, Math.PI / 2], [32, 56, Math.PI], [8, 32, -Math.PI / 2]]) {
+      g.save(); g.translate(dx, dy); g.rotate(rot);
+      g.beginPath(); g.moveTo(-4, -2); g.lineTo(0, 4); g.lineTo(4, -2); g.lineTo(0, 0); g.closePath(); g.fill();
+      g.restore();
+    }
+    g.strokeStyle = 'rgba(255,232,154,0.9)'; g.lineWidth = 2;   // center cross-hair glow
+    g.beginPath(); g.arc(32, 32, 6, 0, TAU); g.stroke();
+  });
+}
+function deskTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#6a7078'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#c4cad2'; g.fillRect(0, 0, 64, 14); // desktop
+    g.fillStyle = '#767c84'; g.fillRect(0, 14, 64, 2);
+    g.fillStyle = '#565c64'; g.fillRect(6, 22, 22, 10); g.fillRect(36, 22, 22, 10); // drawers
+    g.fillStyle = '#3c4148'; g.fillRect(16, 26, 4, 2); g.fillRect(46, 26, 4, 2);
+    g.fillStyle = '#2fae5b'; g.fillRect(50, 4, 8, 4);  // monitor glow
+    speckle(g, 200, 'rgba(0,0,0,0.10)', 'rgba(255,255,255,0.06)');
+  });
+}
+
+/* ---- new floor / ceiling textures ---- */
+function grassTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#25371e'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 900; i++) {
+      g.fillStyle = srnd() < 0.5 ? '#2d4523' : '#1c2b17';
+      g.fillRect((srnd() * 64) | 0, (srnd() * 64) | 0, 1, 1 + ((srnd() * 2) | 0));
+    }
+    for (let i = 0; i < 30; i++) { g.fillStyle = '#4a5c30'; g.fillRect((srnd() * 63) | 0, (srnd() * 63) | 0, 1, 2); }
+  });
+}
+function dirtTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#4a3a26'; g.fillRect(0, 0, 64, 64);
+    speckle(g, 900, 'rgba(0,0,0,0.2)', 'rgba(210,180,130,0.09)');
+    for (let i = 0; i < 12; i++) {
+      g.fillStyle = 'rgba(30,22,14,0.4)';
+      g.fillRect((srnd() * 58) | 0, (srnd() * 58) | 0, 3 + ((srnd() * 5) | 0), 2);
+    }
+  });
+}
+function waterTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#12283e'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 26; i++) {
+      g.fillStyle = srnd() < 0.5 ? 'rgba(80,140,190,0.25)' : 'rgba(0,0,0,0.25)';
+      g.fillRect((srnd() * 56) | 0, (srnd() * 62) | 0, 4 + ((srnd() * 10) | 0), 1);
+    }
+    g.fillStyle = 'rgba(160,200,230,0.18)';
+    g.fillRect(8, 12, 14, 1); g.fillRect(40, 30, 12, 1); g.fillRect(20, 48, 16, 1);
+  });
+}
+function planksTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#4e3820'; g.fillRect(0, 0, 64, 64);
+    for (let x = 0; x < 64; x += 11) {
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(x, 0, 1, 64);
+      g.fillStyle = 'rgba(255,220,160,0.05)'; g.fillRect(x + 1, 0, 1, 64);
+    }
+    for (let i = 0; i < 20; i++) {
+      g.fillStyle = 'rgba(0,0,0,0.18)';
+      g.fillRect((srnd() * 50) | 0, (srnd() * 62) | 0, 6 + ((srnd() * 8) | 0), 1);
+    }
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.fillRect(5, 12, 1, 11); g.fillRect(28, 40, 1, 13); g.fillRect(45, 5, 1, 12); g.fillRect(17, 52, 1, 11);
+  });
+}
+function glossTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#b8bcc2'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 26; i++) {                     // faint reflections
+      g.fillStyle = 'rgba(255,255,255,0.10)';
+      g.fillRect((srnd() * 56) | 0, (srnd() * 56) | 0, 4 + ((srnd() * 10) | 0), 2 + ((srnd() * 3) | 0));
+    }
+    g.fillStyle = 'rgba(0,0,0,0.10)';
+    g.fillRect(0, 0, 64, 1); g.fillRect(0, 32, 64, 1); g.fillRect(0, 0, 1, 64); g.fillRect(32, 0, 1, 64);
+    speckle(g, 160, 'rgba(0,0,0,0.06)', 'rgba(255,255,255,0.08)');
+  });
+}
+function carpetTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#3a4258'; g.fillRect(0, 0, 64, 64);
+    speckle(g, 1400, 'rgba(0,0,0,0.18)', 'rgba(150,170,210,0.10)');
+    g.fillStyle = 'rgba(0,0,0,0.12)';
+    g.fillRect(0, 0, 64, 1); g.fillRect(0, 16, 64, 1); g.fillRect(0, 32, 64, 1); g.fillRect(0, 48, 64, 1);
+  });
+}
+function ctileTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#c8c4b8'; g.fillRect(0, 0, 64, 64);
+    for (let y = 0; y < 64; y += 16) for (let x = 0; x < 64; x += 16) {
+      if (((x / 16) + (y / 16)) % 2) { g.fillStyle = '#9aa898'; g.fillRect(x, y, 16, 16); }
+      g.fillStyle = 'rgba(0,0,0,0.22)'; g.fillRect(x, y, 16, 1); g.fillRect(x, y, 1, 16);
+    }
+    speckle(g, 300, 'rgba(0,0,0,0.08)', 'rgba(255,255,255,0.07)');
+  });
+}
+function marbleTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#d8d4cc'; g.fillRect(0, 0, 64, 64);
+    for (let i = 0; i < 10; i++) {                     // veins
+      let x = srnd() * 64;
+      g.fillStyle = 'rgba(120,120,135,0.35)';
+      for (let y = 0; y < 64; y += 2 + (srnd() * 3 | 0)) { g.fillRect(x | 0, y | 0, 1, 2); x += (srnd() - 0.5) * 4; }
+    }
+    g.fillStyle = 'rgba(60,60,70,0.5)'; g.fillRect(0, 0, 64, 2); g.fillRect(0, 62, 64, 2);
+    speckle(g, 140, 'rgba(0,0,0,0.05)', 'rgba(255,255,255,0.10)');
+  });
+}
+function regolithTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#8e8a82'; g.fillRect(0, 0, 64, 64);
+    speckle(g, 1100, 'rgba(0,0,0,0.14)', 'rgba(255,255,255,0.09)');
+    for (let i = 0; i < 8; i++) {                      // tiny craters
+      const x = (srnd() * 54) | 0, y = (srnd() * 54) | 0, r = 2 + ((srnd() * 3) | 0);
+      g.fillStyle = 'rgba(0,0,0,0.20)'; g.beginPath(); g.arc(x + r, y + r, r, 0, TAU); g.fill();
+      g.fillStyle = 'rgba(255,255,255,0.10)'; g.beginPath(); g.arc(x + r, y + r - 1, r, Math.PI, TAU); g.fill();
+    }
+  });
+}
+function trackTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#6e6455'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(40,35,28,0.55)';
+    for (let y = 2; y < 64; y += 8) { g.fillRect(8, y, 20, 3); g.fillRect(38, y, 20, 3); }
+    speckle(g, 500, 'rgba(0,0,0,0.16)', 'rgba(230,220,200,0.08)');
+  });
+}
+function pitTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#3c3830'; g.fillRect(0, 0, 64, 64);
+    speckle(g, 700, 'rgba(0,0,0,0.3)', 'rgba(200,190,170,0.06)');
+    for (let i = 0; i < 5; i++) {
+      g.fillStyle = 'rgba(0,0,0,0.35)'; g.beginPath();
+      g.arc((srnd() * 60) | 0, (srnd() * 60) | 0, 3 + ((srnd() * 5) | 0), 0, TAU); g.fill();
+    }
+  });
+}
+function deckTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#4c525a'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#33383e';
+    for (let y = 0; y < 64; y += 8) g.fillRect(0, y, 64, 3);
+    for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 3, 64);
+    g.fillStyle = 'rgba(255,255,255,0.10)';
+    for (let y = 3; y < 64; y += 8) g.fillRect(0, y, 64, 1);
+    speckle(g, 250, 'rgba(0,0,0,0.15)', 'rgba(255,255,255,0.07)');
+  });
+}
+function beamsTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#241a12'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#3c2c1c';
+    for (const x of [4, 28, 52]) g.fillRect(x, 0, 8, 64);
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.fillRect(10, 0, 2, 64); g.fillRect(34, 0, 2, 64); g.fillRect(58, 0, 2, 64);
+    speckle(g, 300, 'rgba(0,0,0,0.3)', 'rgba(200,150,90,0.05)');
+  });
+}
+function oceilTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#c2c6cc'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#8e939a';
+    for (let v = 0; v <= 64; v += 32) { g.fillRect(0, v, 64, 1); g.fillRect(v, 0, 1, 64); }
+    g.fillStyle = '#dfe3e8';
+    for (let y = 8; y < 64; y += 32) for (let x = 8; x < 64; x += 32) g.fillRect(x, y, 14, 14);
+    speckle(g, 150, 'rgba(0,0,0,0.05)', 'rgba(255,255,255,0.06)');
+  });
+}
+function lceilTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#a8a49e'; g.fillRect(0, 0, 64, 64);
+    speckle(g, 300, 'rgba(0,0,0,0.10)', 'rgba(255,255,255,0.08)');
+    g.fillStyle = '#8a8680'; g.fillRect(0, 30, 64, 4);
+    g.fillStyle = '#ffd970'; g.fillRect(14, 28, 36, 8);
+    g.fillStyle = '#fff7d8'; g.fillRect(14, 30, 36, 3);
+  });
+}
+function hullceilTex(){
+  return texCanvas(g => {
+    g.fillStyle = '#3a3f46'; g.fillRect(0, 0, 64, 64);
+    g.fillStyle = '#2a2e34';
+    for (let y = 0; y < 64; y += 16) g.fillRect(0, y, 64, 4);
+    g.fillStyle = '#5a606a';
+    for (let y = 4; y < 64; y += 16) g.fillRect(0, y, 64, 1);
+    g.fillStyle = '#ffd970'; g.fillRect(28, 8, 8, 48);
+    speckle(g, 200, 'rgba(0,0,0,0.18)', 'rgba(255,255,255,0.06)');
+  });
+}
+
+/* ---- sky backdrops (512x288, angular sampling: 512px per 90 deg of view) ---- */
+const SKYW = 512, SKYH = 288, SKYK = SKYW / (Math.PI / 2);   // px per radian, both axes
+function skyCanvas(fn){
+  const c = document.createElement('canvas'); c.width = SKYW; c.height = SKYH;
+  const g = c.getContext('2d'); fn(g);
+  return new Uint32Array(g.getImageData(0, 0, SKYW, SKYH).data.buffer);
+}
+function skyNightTex(){
+  return skyCanvas(g => {
+    for (let y = 0; y < SKYH; y++) {                   // deep blue-black gradient
+      const t = y / SKYH;
+      g.fillStyle = `rgb(${6 + t * 10 | 0},${8 + t * 14 | 0},${18 + t * 26 | 0})`;
+      g.fillRect(0, y, SKYW, 1);
+    }
+    for (let i = 0; i < 700; i++) {                    // stars
+      const x = (Math.random() * SKYW) | 0, y = (Math.random() * (SKYH - 60)) | 0;
+      g.fillStyle = Math.random() < 0.3 ? '#cfe0ff' : '#8d9ac2';
+      g.fillRect(x, y, 1, 1);
+      if (Math.random() < 0.08) { g.fillStyle = '#e8f0ff'; g.fillRect(x, y - 1, 1, 3); g.fillRect(x - 1, y, 3, 1); }
+    }
+    const mx = 150, my = 95, mr = 36;                  // big full moon, low over the treeline
+    g.fillStyle = 'rgba(230,228,210,0.10)'; g.beginPath(); g.arc(mx, my, mr + 10, 0, TAU); g.fill();
+    g.fillStyle = '#e8e4d4'; g.beginPath(); g.arc(mx, my, mr, 0, TAU); g.fill();
+    g.fillStyle = '#d8d4c2'; g.beginPath(); g.arc(mx - 8, my - 5, 28, 0, TAU); g.fill();
+    for (const [cx, cy, cr] of [[-9, -5, 7], [9, 7, 6], [-3, 14, 5], [13, -11, 4], [-16, 9, 4]]) {
+      g.fillStyle = 'rgba(160,156,140,0.55)'; g.beginPath(); g.arc(mx + cx, my + cy, cr, 0, TAU); g.fill();
+    }
+    g.fillStyle = '#06070a';                           // treeline silhouette, base on the horizon row
+    for (let x = 0; x < SKYW; x += 4) {
+      const h = 14 + Math.round(8 * Math.sin(x * 0.05) + 6 * Math.sin(x * 0.13 + 2) + Math.random() * 6);
+      g.fillRect(x, SKYH / 2 - h, 4, h);
+      if (Math.random() < 0.35) g.fillRect(x + 1, SKYH / 2 - h - 3, 2, 3);
+    }
+  });
+}
+function skyMoonTex(){
+  return skyCanvas(g => {
+    for (let y = 0; y < SKYH; y++) {
+      g.fillStyle = `rgb(${2 + y * 0.06 | 0},${2 + y * 0.06 | 0},${4 + y * 0.1 | 0})`;
+      g.fillRect(0, y, SKYW, 1);
+    }
+    for (let i = 0; i < 800; i++) {
+      const x = (Math.random() * SKYW) | 0, y = (Math.random() * (SKYH - 50)) | 0;
+      g.fillStyle = Math.random() < 0.25 ? '#ffffff' : '#9aa4c8';
+      g.fillRect(x, y, 1, 1);
+    }
+    const ex = 360, ey = 80, er = 30;                  // Earthrise
+    g.fillStyle = '#2e6ac8'; g.beginPath(); g.arc(ex, ey, er, 0, TAU); g.fill();
+    g.fillStyle = '#4f9a3a';
+    for (const [dx, dy, r] of [[-8, -5, 8], [8, 3, 6], [-3, 11, 5], [10, -10, 4]]) {
+      g.beginPath(); g.arc(ex + dx, ey + dy, r, 0, TAU); g.fill();
+    }
+    g.fillStyle = 'rgba(255,255,255,0.5)'; g.beginPath(); g.arc(ex - 9, ey - 9, 8, 0, TAU); g.fill();
+    g.fillStyle = '#3a362e';                           // hill silhouette, base on the horizon row
+    for (let x = 0; x < SKYW; x += 2) {
+      const h = 10 + Math.round(10 * Math.sin(x * 0.02) + 8 * Math.sin(x * 0.055 + 1.5));
+      g.fillRect(x, SKYH / 2 - Math.max(3, h), 2, Math.max(3, h));
+    }
+  });
+}
 
 /* ---------------- sprite helpers ---------------- */
 function cvs(w, h){
@@ -392,15 +767,116 @@ function sprData(c){ // canvas -> {w,h,data:Uint32Array}
   const g = c.getContext('2d');
   return { w: c.width, h: c.height, data: new Uint32Array(g.getImageData(0, 0, c.width, c.height).data.buffer) };
 }
+
+/* ---------------- scenery prop sprites ---------------- */
+function treeSpr(dead){
+  const [c, g] = cvs(64, 96);
+  if (dead) {
+    g.fillStyle = '#2a2018'; g.fillRect(28, 40, 8, 56);
+    g.strokeStyle = '#241b12'; g.lineWidth = 4; g.lineCap = 'round';
+    for (const [x0, y0, x1, y1] of [[32, 46, 12, 28], [32, 52, 54, 36], [30, 66, 8, 56], [34, 70, 56, 62], [32, 40, 22, 16], [32, 40, 44, 20]]) {
+      g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
+    }
+  } else {
+    g.fillStyle = '#2a2018'; g.fillRect(28, 60, 8, 36);
+    for (const [cx, cy, r, col] of [[32, 48, 22, '#16240f'], [22, 56, 14, '#16240f'], [42, 56, 14, '#1a2c12'],
+        [32, 36, 18, '#1e3414'], [32, 24, 12, '#264018']]) {
+      g.fillStyle = col; g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();
+    }
+    g.fillStyle = 'rgba(80,120,60,0.25)';
+    for (let i = 0; i < 20; i++) {
+      const a = Math.random() * TAU, r = Math.random() * 24;
+      g.fillRect((32 + Math.cos(a) * r) | 0, (34 + Math.sin(a) * r) | 0, 2, 2);
+    }
+  }
+  return sprData(c);
+}
+function wellSpr(){
+  const [c, g] = cvs(64, 64);
+  g.fillStyle = '#3c3a36'; g.beginPath(); g.ellipse(32, 56, 22, 7, 0, 0, TAU); g.fill();
+  g.fillStyle = '#6e6a62'; g.beginPath(); g.ellipse(32, 50, 20, 10, 0, 0, TAU); g.fill();
+  g.fillStyle = '#1c1c22'; g.beginPath(); g.ellipse(32, 48, 13, 6, 0, 0, TAU); g.fill();
+  g.fillStyle = '#8a857c';
+  for (const [x, y] of [[14, 44], [22, 40], [30, 38], [40, 40], [48, 44]]) g.fillRect(x, y, 5, 4);
+  g.fillStyle = '#4a3826'; g.fillRect(14, 20, 4, 24); g.fillRect(46, 20, 4, 24);
+  g.fillStyle = '#5c4630'; g.beginPath();
+  g.moveTo(6, 22); g.lineTo(32, 6); g.lineTo(58, 22); g.lineTo(52, 26); g.lineTo(32, 12); g.lineTo(12, 26);
+  g.closePath(); g.fill();
+  g.fillStyle = '#3a2c1c'; g.fillRect(10, 24, 44, 2);
+  return sprData(c);
+}
+function shipSpr(){
+  const [c, g] = cvs(64, 80);
+  g.fillStyle = '#9aa2ac'; g.beginPath();
+  g.moveTo(32, 6); g.quadraticCurveTo(48, 30, 46, 62); g.lineTo(18, 62);
+  g.quadraticCurveTo(16, 30, 32, 6); g.fill();
+  g.fillStyle = '#6e747c'; g.fillRect(18, 58, 28, 6);
+  g.fillStyle = '#c0272d'; g.fillRect(28, 12, 8, 14);
+  g.fillStyle = '#40c8e8'; g.beginPath(); g.arc(32, 30, 6, 0, TAU); g.fill();
+  g.fillStyle = '#8aa8c0'; g.fillRect(30, 27, 3, 3);
+  g.fillStyle = '#7c848c';
+  g.beginPath(); g.moveTo(18, 50); g.lineTo(4, 66); g.lineTo(18, 64); g.fill();
+  g.beginPath(); g.moveTo(46, 50); g.lineTo(60, 66); g.lineTo(46, 64); g.fill();
+  g.fillStyle = '#c9a227'; g.fillRect(26, 64, 12, 4);
+  g.fillStyle = '#ff9a20'; g.fillRect(28, 68, 8, 6);
+  return sprData(c);
+}
+function landerSpr(){
+  const [c, g] = cvs(64, 64);
+  g.fillStyle = '#b8a878';
+  g.beginPath(); g.moveTo(20, 18); g.lineTo(44, 18); g.lineTo(48, 36); g.lineTo(16, 36); g.closePath(); g.fill();
+  g.fillStyle = '#8a7c50';
+  for (let y = 20; y < 36; y += 4) g.fillRect(16, y, 32, 1);
+  g.fillStyle = '#c8ccd4'; g.beginPath(); g.arc(32, 14, 8, 0, Math.PI, true); g.fill();
+  g.fillStyle = '#20242c'; g.fillRect(26, 10, 12, 4);
+  g.strokeStyle = '#8d9299'; g.lineWidth = 3;
+  for (const [x0, x1] of [[18, 8], [46, 56]]) { g.beginPath(); g.moveTo(x0, 36); g.lineTo(x1, 58); g.stroke(); }
+  g.fillStyle = '#8d9299'; g.fillRect(6, 56, 8, 3); g.fillRect(52, 56, 8, 3);
+  g.fillStyle = '#c0272d'; g.fillRect(22, 24, 8, 4);
+  return sprData(c);
+}
+function plantSpr(){
+  const [c, g] = cvs(64, 64);
+  g.fillStyle = '#7c4a3a';
+  g.beginPath(); g.moveTo(20, 44); g.lineTo(44, 44); g.lineTo(40, 64); g.lineTo(24, 64); g.closePath(); g.fill();
+  g.fillStyle = '#5c3628'; g.fillRect(20, 44, 24, 3);
+  g.strokeStyle = '#2c6a34'; g.lineWidth = 3;
+  for (const [cx, cy] of [[20, 26], [44, 28], [32, 16], [12, 36], [52, 38]]) {
+    g.beginPath(); g.moveTo(32, 46); g.quadraticCurveTo(cx, cy, (cx + 32) / 2, cy + (cy < 32 ? -6 : 4)); g.stroke();
+  }
+  g.fillStyle = '#3d8a48';
+  for (let i = 0; i < 24; i++) g.fillRect((14 + Math.random() * 36) | 0, (14 + Math.random() * 30) | 0, 3, 5);
+  return sprData(c);
+}
+function crateSpr(){
+  const [c, g] = cvs(64, 64);
+  g.fillStyle = '#7a5a30'; g.fillRect(10, 16, 44, 48);
+  g.fillStyle = '#5c4020'; g.fillRect(10, 16, 44, 4); g.fillRect(10, 30, 44, 3); g.fillRect(10, 44, 44, 3);
+  g.strokeStyle = '#4a3418'; g.lineWidth = 3; g.strokeRect(11, 17, 42, 46);
+  g.fillStyle = '#2c2418'; g.fillRect(30, 36, 4, 8);
+  g.fillStyle = 'rgba(255,220,150,0.15)'; g.fillRect(12, 18, 6, 44);
+  return sprData(c);
+}
 const SPR = {};    // world sprites (Uint32)
 const WSPR = {};   // first-person weapon canvases
 const MUG = {};    // HUD mugshot canvases
 
-/* ---------------- trump sprite art ---------------- */
-function drawTrumpFigure(g, frame, variant){
-  const P = { suit:'#262e57', suitD:'#1a2040', shirt:'#e9e9e4', tie:'#c0272d', tieD:'#8e1b20',
+/* ---------------- trump sprite art ----------------
+   skins: trump = the original; vance = slim, dark hair + beard, blue tie;
+          hegseth = blond crew cut, olive suit.                            */
+const FIG_PAL = {
+  trump: { suit:'#262e57', suitD:'#1a2040', shirt:'#e9e9e4', tie:'#c0272d', tieD:'#8e1b20',
     skin:'#f2a56b', skinD:'#d3854a', hair:'#f6d64b', hairHi:'#ffee9a', hairD:'#dcb32c',
-    dark:'#14141f', white:'#ffffff', gun:'#2c2c34', blood:'#7a1015', mouth:'#8a4a2a' };
+    dark:'#14141f', white:'#ffffff', gun:'#2c2c34', blood:'#7a1015', mouth:'#8a4a2a' },
+  vance: { suit:'#33384a', suitD:'#232736', shirt:'#dfe4ea', tie:'#2e4a7c', tieD:'#1f3458',
+    skin:'#e8b088', skinD:'#c68e5e', hair:'#4a3220', hairHi:'#6a4a2e', hairD:'#33220f',
+    dark:'#14141f', white:'#ffffff', gun:'#2c2c34', blood:'#7a1015', mouth:'#8a4a2a', beard:'#3a2a1c' },
+  hegseth: { suit:'#3a4034', suitD:'#2a2f26', shirt:'#e9e9e4', tie:'#7c1f2a', tieD:'#571620',
+    skin:'#e8a878', skinD:'#c6824e', hair:'#d8b45c', hairHi:'#eed28a', hairD:'#b08a3e',
+    dark:'#14141f', white:'#ffffff', gun:'#2c2c34', blood:'#7a1015', mouth:'#8a4a2a' },
+};
+function drawTrumpFigure(g, frame, variant, skin = 'trump'){
+  const P = FIG_PAL[skin], slim = skin === 'vance';
   const px = (x,y,w,h,c) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
 
   if (frame === 'd2' || frame === 'dead') { // lying flat
@@ -426,7 +902,7 @@ function drawTrumpFigure(g, frame, variant){
   // fat torso
   const ty = 20 + dy;
   px(15, ty, 34, 24 - squat, P.suit);
-  px(12, ty + 4, 40, 16 - squat, P.suit);          // belly overhang
+  if (!slim) px(12, ty + 4, 40, 16 - squat, P.suit);   // belly overhang (Vance skips it)
   px(26, ty, 3, 10, P.suitD); px(35, ty, 3, 10, P.suitD);   // lapels
   px(29, ty, 6, 5, P.shirt); px(30, ty + 5, 4, 4, P.shirt);
   px(30, ty + 2, 4, 4, P.tie); px(29, ty + 6, 6, 3, P.tie);
@@ -451,6 +927,14 @@ function drawTrumpFigure(g, frame, variant){
   px(19, 0 + dy, 26, 5, P.hair); px(19, 3 + dy, 13, 4, P.hair);
   px(40, 1 + dy, 6, 8, P.hair); px(16, 3 + dy, 4, 3, P.hairD);
   px(19, 0 + dy, 26, 1, P.hairHi);
+  if (skin === 'vance') {                            // short dark hair + full beard
+    px(21, 0 + dy, 22, 6, P.hair); px(19, 4 + dy, 3, 8, P.hair); px(42, 4 + dy, 3, 8, P.hair);
+    px(21, 0 + dy, 22, 1, P.hairHi);
+    px(19, 12 + dy, 26, 6, P.beard); px(22, 17 + dy, 20, 4, P.beard);
+  } else if (skin === 'hegseth') {                   // blond crew cut
+    px(21, 1 + dy, 22, 5, P.hair); px(19, 3 + dy, 26, 2, P.hairD);
+    px(21, 1 + dy, 22, 1, P.hairHi);
+  }
   // face
   if (hurtFace) {
     px(23, 11 + dy, 6, 2, P.dark); px(35, 11 + dy, 6, 2, P.dark);
@@ -466,12 +950,12 @@ function drawTrumpFigure(g, frame, variant){
   }
   px(19, 13 + dy, 3, 3, P.skinD); px(42, 13 + dy, 3, 3, P.skinD); // jowl shade
 }
-function trumpSpriteSet(variant){
+function trumpSpriteSet(variant, skin = 'trump'){
   const frames = ['w0','w1','w2','w3','aim','fire','pain','d0','d1','d2','dead'];
   const set = { walk: [], die: [], dead: null, aim: null, fire: null, pain: null };
   for (const f of frames) {
     const [c] = cvs(64, 64);
-    drawTrumpFigure(c.getContext('2d'), f, variant);
+    drawTrumpFigure(c.getContext('2d'), f, variant, skin);
     const s = sprData(c);
     if (f === 'w0' || f === 'w1' || f === 'w2' || f === 'w3') set.walk.push(s);
     else if (f === 'd0' || f === 'd1' || f === 'd2') set.die.push(s);
@@ -630,27 +1114,76 @@ function weaponCanvas(kind, firing){
   return c;
 }
 /* ---------------- map ---------------- */
-const T_EMPTY=0, T_STONE=1, T_BRICK=2, T_MOSS=3, T_TECH=4, T_DOOR=5, T_DOORL=6, T_SECRET=7, T_EXIT=8, T_PILLAR=9;
-// texture index per tile (into wallTex[])
-const WALL_TEXIDX = {1:0, 2:1, 3:2, 4:3, 5:4, 6:5, 7:0, 8:6, 9:7};
+const T_EMPTY=0, T_STONE=1, T_BRICK=2, T_MOSS=3, T_TECH=4, T_DOOR=5, T_DOORL=6, T_SECRET=7, T_EXIT=8,
+      T_PILLAR=9, T_WOOD=10, T_WINDOW=11, T_ROCK=12, T_METAL=13, T_LIFT=14;
 
-const MAPW = 48, MAPH = 48;
-let grid = null;
-let doors = new Map();          // key = y*MAPW+x -> door obj
+let MAPW = 48, MAPH = 48;
+let grid = null;        // wall tiles
+let fgrid = null;       // floor tex index per cell
+let cgrid = null;       // ceil tex index per cell (-1 = open sky)
+let doors = new Map();  // key = y*MAPW+x -> door obj
+let props = [];         // scenery billboards (trees, wells, ships...) — block movement
+let stairLinks = new Map(); // teleport pads (office multi-floor): tileIdx -> [tx,ty]
 let secretTotalTiles = 0;
+let curLevel = 0, LVL = null;   // active level definition
+let qAng = null;                // ?ang= dev hook: forced spawn facing (radians)
+let qPos = null;                // ?pos=x,y dev hook: forced spawn position
+
+// map-string chars -> tiles ('.'/'O'/'~'/','/'f' etc. are open cells; floor/ceil variants
+// come from the level's fp/cp char tables; cgrid -1 = sky)
+const CHARTILE = { '#':T_STONE, 'b':T_BRICK, 'm':T_MOSS, 't':T_TECH, '+':T_DOOR, 'L':T_DOORL,
+  'S':T_SECRET, 'X':T_EXIT, 'P':T_PILLAR, 'w':T_WOOD, 'v':T_WINDOW, 'r':T_ROCK, 'M':T_METAL,
+  'E':T_LIFT };
+const WALLCHARS = new Set(Object.keys(CHARTILE));
 
 function tget(x, y){ return grid[y * MAPW + x]; }
 function tset(x, y, v){ grid[y * MAPW + x] = v; }
+function isDoorTile(t){ return t === T_DOOR || t === T_DOORL || t === T_SECRET; }
+
+function buildMap(){
+  const def = LVL;
+  if (def.build) {                    // imperative layout (level 1 dungeon)
+    MAPW = def.size[0]; MAPH = def.size[1];
+    grid = new Uint8Array(MAPW * MAPH).fill(def.wallFill || T_STONE);
+    fgrid = new Uint8Array(MAPW * MAPH).fill(def.fDefault);
+    cgrid = new Int16Array(MAPW * MAPH).fill(def.cDefault);
+    doors = new Map(); props = []; stairLinks = new Map();
+    secretTotalTiles = 0;
+    def.build();
+    return;
+  }
+  MAPW = def.map[0].length; MAPH = def.map.length;
+  grid = new Uint8Array(MAPW * MAPH);
+  fgrid = new Uint8Array(MAPW * MAPH);
+  cgrid = new Int16Array(MAPW * MAPH);
+  doors = new Map(); props = []; stairLinks = new Map();
+  secretTotalTiles = 0;
+  for (let y = 0; y < MAPH; y++) {
+    const row = def.map[y];
+    for (let x = 0; x < MAPW; x++) {
+      const ch = x < row.length ? row[x] : '#';
+      const wc = CHARTILE[ch];
+      const i = y * MAPW + x;
+      if (wc !== undefined) { grid[i] = wc; fgrid[i] = def.fDefault; cgrid[i] = def.cDefault; }
+      else { // open cell: floor/ceiling from char tables
+        grid[i] = T_EMPTY;
+        fgrid[i] = def.fp[ch] !== undefined ? def.fp[ch] : def.fDefault;
+        cgrid[i] = def.cp[ch] !== undefined ? def.cp[ch] : def.cDefault;
+      }
+      if (wc === T_DOOR || wc === T_DOORL || wc === T_SECRET) {
+        doors.set(i, { x, y, type: wc, open: 0, state: 0, timer: 0, used: false });
+        // count secret door *groups* (stats.secrets counts groups, not tiles)
+        if (wc === T_SECRET && !(y > 0 && grid[i - MAPW] === T_SECRET) && !(x > 0 && grid[i - 1] === T_SECRET))
+          secretTotalTiles++;
+      }
+    }
+  }
+}
 function carve(x, y, w, h){
   for (let yy = y; yy < y + h; yy++)
     for (let xx = x; xx < x + w; xx++) grid[yy * MAPW + xx] = T_EMPTY;
 }
-function isDoorTile(t){ return t === T_DOOR || t === T_DOORL || t === T_SECRET; }
-
-function buildMap(){
-  grid = new Uint8Array(MAPW * MAPH).fill(T_STONE);
-  doors = new Map();
-  secretTotalTiles = 0;
+function buildDungeon(){              // level 1: the original dungeon (imperative layout)
   // rooms
   carve(4, 40, 8, 6);    // A: start chamber
   carve(2, 26, 10, 8);   // B: armory
@@ -681,7 +1214,8 @@ function buildMap(){
     const t = tget(x, y);
     if (isDoorTile(t)) {
       doors.set(y * MAPW + x, { x, y, type: t, open: 0, state: 0, timer: 0, used: false });
-      if (t === T_SECRET) secretTotalTiles++;
+      if (t === T_SECRET && !(y > 0 && tget(x, y - 1) === T_SECRET) && !(x > 0 && tget(x - 1, y) === T_SECRET))
+        secretTotalTiles++;               // count groups: top-left tile of each secret door
     }
   }
 }
@@ -702,25 +1236,25 @@ function sightBlocked(x, y){
 }
 
 /* ---------------- things ---------------- */
-const THINGS = [
-  ['player', 7, 43],
+// enemy kinds: t_* = Trump, v_* = Vance, h_* = Hegseth; _shooter fires bolts, _charger charges
+const DUNGEON_THINGS = [
   ['clip', 5, 42],
   // armory
   ['shotgun', 3, 28], ['shells', 3, 31], ['shells', 6, 31], ['shells', 9, 29],
   ['clip', 8, 27], ['armor', 10, 32], ['medkit', 2, 30],
   // great pillar hall
-  ['t_shooter', 24, 30], ['t_shooter', 31, 26], ['t_shooter', 20, 38], ['t_shooter', 33, 40],
-  ['t_charger', 27, 33], ['t_charger', 25, 42],
+  ['t_shooter', 24, 30], ['t_shooter', 31, 26], ['t_shooter', 20, 38], ['h_shooter', 33, 40],
+  ['v_charger', 27, 33], ['t_charger', 25, 42],
   ['clip', 19, 25], ['clip', 34, 44], ['medkit', 34, 25], ['shells', 19, 43],
   // corridor to cells
   ['shells', 26, 17],
   // prison cells
-  ['t_shooter', 20, 10], ['t_shooter', 26, 10], ['t_shooter', 32, 10], ['t_shooter', 37, 10],
-  ['t_charger', 25, 13], ['t_charger', 32, 13],
+  ['t_shooter', 20, 10], ['t_shooter', 26, 10], ['h_shooter', 32, 10], ['t_shooter', 37, 10],
+  ['t_charger', 25, 13], ['h_charger', 32, 13],
   ['chaingun', 21, 14], ['medkit', 19, 14], ['clip', 36, 9], ['shells', 24, 14], ['clip', 30, 14],
   // key vault
-  ['key', 42, 33], ['t_shooter', 39, 31], ['t_shooter', 44, 31], ['t_shooter', 41, 36],
-  ['t_charger', 43, 35], ['armor', 44, 36], ['medkit', 39, 36],
+  ['key', 42, 33], ['t_shooter', 39, 31], ['v_shooter', 44, 31], ['t_shooter', 41, 36],
+  ['h_charger', 43, 35], ['armor', 44, 36], ['medkit', 39, 36],
   // secret cache
   ['rlauncher', 43, 16], ['rockets', 41, 17], ['rockets', 44, 17], ['medkit', 41, 15], ['clip', 44, 15],
   // exit chamber
@@ -738,6 +1272,281 @@ const ITEM_DEFS = {
   chaingun:  { msg: 'YOU GOT THE CHAINGUN!' },
   rlauncher: { msg: 'YOU GOT THE ROCKET LAUNCHER!' },
 };
+
+/* ---------------- level definitions ----------------
+   Wall chars: # stone  b brick  m moss  t tech  P pillar  w wood  v window
+               r rock  M metal  + door  L locked  S secret  X exit
+   Open-cell chars: floor/ceiling variants via each level's fp/cp char tables
+   (cp value -1 = open sky). fp/cp indices index that level's floorTexs/ceilTexs.
+   things: enemies (t_/v_/h_ shooter/charger), items, props (PROP_DEFS),
+           ['stairs', x, y, tx, ty] teleport pads.                          */
+const LEVELS = [
+  { // ---- 1: THE DUNGEON (original level) ----
+    name: 'THE DUNGEON', size: [48, 48], wallFill: T_STONE,
+    fDefault: 0, cDefault: 0, build: buildDungeon,
+    spawn: [7, 43, -Math.PI / 2], par: 100, ambient: 1.0, sky: null,
+    texOf: () => ({ 1:TEX.stone, 2:TEX.brick, 3:TEX.moss, 4:TEX.tech, 5:TEX.door,
+      6:TEX.doorL, 7:TEX.stone, 8:TEX.exit, 9:TEX.pillar }),
+    floorTexs: () => [TEX.floor, TEX.floor], ceilTexs: () => [TEX.ceil, TEX.ceil],
+    intro: 'FIND THE RED KEYCARD. FLIP THE EXIT SWITCH.',
+    things: DUNGEON_THINGS,
+  },
+  { // ---- 2: HAUNTED WOODS (spooky outdoors at night, full moon) ----
+    name: 'HAUNTED WOODS',
+    fDefault: 0, cDefault: -1,
+    // floors: 0 grass  1 dirt  2 water  3 wood planks ; ceilings: 0 cabin beams
+    fp: { '.':0, ',':1, '~':2, 'f':3 },
+    cp: { '.':-1, ',':-1, '~':-1, 'f':0 },
+    spawn: [10, 41, -Math.PI / 2], par: 150, ambient: 0.82, sky: 'night',
+    texOf: () => ({ 1:TEX.woodDark, 2:TEX.stone, 3:TEX.moss, 5:TEX.door, 6:TEX.doorL,
+      7:TEX.wood, 8:TEX.exit, 10:TEX.wood }),
+    floorTexs: () => [TEX.grass, TEX.dirt, TEX.water, TEX.planks],
+    ceilTexs: () => [TEX.beams],
+    intro: 'THE WOODS ARE HAUNTED. THE MOON IS FULL. FIND THE KEY.',
+    map: [
+      "################################################",
+      "#..............................................#",
+      "#..............................................#",
+      "#.......................wwwwwXwwwww............#",
+      "#.......................wfffffffffw............#",
+      "#.......................wfffffffffw............#",
+      "#.......................wfffffffffw............#",
+      "#................wwwwww.wfffffffffw............#",
+      "#................wffffw.wfffffffffw............#",
+      "#...m......m.....wffffw.wfffffffffw............#",
+      "#.......m........wffffw.wfffffffffw............#",
+      "#................wwSwww.wwwwLLwwwww............#",
+      "#...........m.,................................#",
+      "#....m....m...,................................#",
+      "#........m....,................................#",
+      "#.............,................................#",
+      "#...m..m......,................................#",
+      "#.............,................................#",
+      "#.............,,,,,,,,,,,,,,,,.................#",
+      "#.............,,,,,,,,,,,,,,,,.................#",
+      "#.............,..................,,............#",
+      "#.............,................................#",
+      "#.............,.....,,,........................#",
+      "#.............,................................#",
+      "#...wwwwwww...,................................#",
+      "#...wfffffw...,................................#",
+      "#...wfffffw...,................................#",
+      "#...wfffffw...,................................#",
+      "#...wfffffw...,...........,,...................#",
+      "#...wfffffw...,................................#",
+      "#...www+www...,................................#",
+      "#.............,................................#",
+      "#.............,................................#",
+      "#.............,...,,..........~~~~~~~~~~~~~~~..#",
+      "#.............,...............~~~~~~~~~~~~~~~..#",
+      "#.............,...............~~~~~~~~~~~~~~~..#",
+      "#.............,...............~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~,,,,~~~~~~..#",
+      "#.............................~fffff,,,~~~~~~..#",
+      "#.............................~fffff,,,~~~~~~..#",
+      "#.............................~~~~~,,,,~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "#.............................~~~~~~~~~~~~~~~..#",
+      "################################################",
+    ],
+    things: [
+      // weapon shack (southwest)
+      ['shotgun', 7, 27], ['shells', 5, 26], ['shells', 9, 26], ['medkit', 7, 29],
+      // graveyard
+      ['armor', 8, 12], ['clip', 5, 10], ['clip', 11, 14],
+      // woods / well clearing
+      ['v_shooter', 20, 15], ['h_charger', 27, 15], ['t_shooter', 8, 20],
+      ['v_charger', 25, 25], ['h_shooter', 33, 25],
+      ['tree', 18, 14], ['tree', 21, 18], ['tree', 27, 12], ['tree', 17, 22],
+      ['tree', 29, 21], ['tree', 31, 17], ['treed', 12, 21], ['treed', 6, 34],
+      ['well', 23, 23],
+      ['clip', 18, 20], ['medkit', 28, 24],
+      // lake + island (key)
+      ['key', 36, 39], ['t_charger', 33, 30], ['v_shooter', 40, 31],
+      ['tree', 29, 33], ['treed', 44, 31],
+      // start area
+      ['clip', 12, 43], ['shells', 16, 42],
+      // secret shed
+      ['rlauncher', 19, 9], ['rockets', 18, 8], ['rockets', 21, 8], ['medkit', 20, 10],
+      // big cabin approach
+      ['t_shooter', 26, 14], ['h_charger', 31, 14],
+    ],
+  },
+  { // ---- 3: TOWER OF POWER (glossy multi-floor office) ----
+    name: 'TOWER OF POWER',
+    fDefault: 0, cDefault: 0,
+    // floors: 0 glossy 1 carpet 2 canteen tile 3 lobby marble ; ceils: 0 office 1 lobby
+    fp: { '.':0, ',':1, '~':2, 'f':3, 'e':4 },
+    cp: { '.':0, ',':0, '~':0, 'f':1, 'e':0 },
+    spawn: [24, 43, -Math.PI / 2], par: 180, ambient: 1.12, sky: null,
+    texOf: () => ({ 1:TEX.stone, 4:TEX.tech, 5:TEX.door, 6:TEX.doorL, 7:TEX.tech,
+      8:TEX.exit, 10:TEX.table, 11:TEX.window, 13:TEX.desk, 14:TEX.elevDoor }),
+    floorTexs: () => [TEX.gloss, TEX.carpet, TEX.ctile, TEX.marble, TEX.lift],
+    ceilTexs: () => [TEX.oceil, TEX.lceil],
+    intro: 'THREE ANGRY DEPARTMENTS. TAKE THE ELEVATOR TO THE EXEC SUITE.',
+    map: [
+      "tttttttttttttttttttttttttttttttttttttttttttttttt",
+      "ttvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvtt",
+      "tv............................................vt",
+      "tv............................................vt",
+      "tv................ttttttXtttttt.....ttttttttt.vt",
+      "tv................tffffffffffft.....tffffffft.vt",
+      "tv................tffffffffffft.....Sffffffft.vt",
+      "tv................tffffffffffft.....Sffffffft.vt",
+      "tv................tffffffffffft.....tffffffft.vt",
+      "tv................tffffffffffft.....ttttttttt.vt",
+      "tv................tttttLLtttttt...............vt",
+      "tv............................................vt",
+      "tv.............,,,,,,,,,,,,,,,,,,,............vt",
+      "tv.............,,,,,,,,,,,,,,,,,,,,vvvvvvvvvv,vt",
+      "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
+      "tv..,MM,,MM,,MM...................,,,,,,,,,,,,vt",
+      "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
+      "tv..,,,,,,,,,,,...................,,,,www,,,,,vt",
+      "tv..,MM,,MM,,MM...................,,,,www,,,,,vt",
+      "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
+      "tv..,,,,,,,,,,,...................,,,,,,,,,,,,vt",
+      "tv................................,,,,,,,,,,,,vt",
+      "tv......................e.....................vt",
+      "ttttttttttttttttttttttttEttttttttttttttttttttttt",
+      "ttttttttttttttttttttttttEttttttttttttttttttttttt",
+      "tv......................e.....................vt",
+      "tv.,,,,,,,,,,,,..................~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~ww~~~ww~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~ww~~~ww~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~ww~~~ww~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~ww~~~ww~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv.,,,,,,,,,,,,.,,,,,,,,,,,,,,,..~~~~~~~~~~~~~vt",
+      "tv............................................vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............fffMMffMMffMMfffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "tv.............ffffffffffffffffff.............vt",
+      "ttvvvvvvvvvvvvvvvvvvvvvtttvvvvvvvvvvvvvvvvvvvvtt",
+      "tttttttttttttttttttttttttttttttttttttttttttttttt",
+
+    ],
+    things: [
+      // floor 1: open office (west, carpet pods)
+      ['v_shooter', 8, 30], ['t_charger', 12, 31], ['h_shooter', 20, 31],
+      ['v_charger', 28, 30], ['t_shooter', 36, 25], ['h_charger', 40, 35],
+      ['clip', 6, 27], ['clip', 12, 27], ['shells', 20, 27], ['medkit', 28, 27],
+      ['shells', 36, 27], ['medkit', 44, 30], ['crate', 4, 26], ['plant', 15, 26],
+      // canteen
+      ['shells', 44, 27], ['medkit', 34, 35],
+      // lobby / reception
+      ['shotgun', 21, 43], ['clip', 18, 42], ['clip', 30, 42], ['armor', 24, 37],
+      ['plant', 17, 41], ['plant', 31, 41], ['crate', 33, 37],
+      // elevator pads (floor 1 <-> floor 2)
+      ['stairs', 24, 22, 24, 25], ['stairs', 24, 25, 24, 22],
+      // floor 2: open office + meeting room
+      ['t_shooter', 8, 16], ['v_shooter', 12, 17], ['h_charger', 27, 12],
+      ['v_charger', 21, 12], ['h_shooter', 36, 15], ['t_charger', 40, 20],
+      ['clip', 6, 16], ['shells', 10, 19], ['medkit', 38, 20], ['clip', 26, 12],
+      ['plant', 33, 12],
+      // secret server room
+      ['rlauncher', 40, 6], ['rockets', 38, 6], ['rockets', 42, 6], ['medkit', 40, 8],
+      // exec suite
+      ['medkit', 21, 6], ['rockets', 26, 6], ['armor', 28, 8], ['v_shooter', 22, 8],
+    ],
+  },
+  { // ---- 4: SEA OF TRANQUILITY (the moon) ----
+    name: 'SEA OF TRANQUILITY',
+    fDefault: 0, cDefault: -1,
+    // floors: 0 regolith 1 track 2 crater pit 3 metal deck ; ceils: 0 hull
+    fp: { '.':0, ',':1, '~':2, 'f':3 },
+    cp: { '.':-1, ',':-1, '~':-1, 'f':0 },
+    spawn: [23, 43, -Math.PI / 2], par: 220, ambient: 1.05, sky: 'moon',
+    texOf: () => ({ 1:TEX.rock, 4:TEX.tech, 5:TEX.door, 6:TEX.doorL, 7:TEX.hull,
+      8:TEX.exit, 12:TEX.rock, 13:TEX.hull }),
+    floorTexs: () => [TEX.regolith, TEX.track, TEX.pit, TEX.deck],
+    ceilTexs: () => [TEX.hullceil],
+    intro: 'ONE SMALL STEP. ONE GIANT ANGRY MOB. REACH THE LANDER.',
+    map: [
+      "################################################",
+      "#..............................................#",
+      "#..............................................#",
+      "#.....................r........................#",
+      "#...................rrrrr......................#",
+      "#....MMMMMMM.......rrrrrrr.....................#",
+      "#....MfffffM........r...r.......rrrrr..........#",
+      "#....MfffffSrrrrr.............rrr...rrr........#",
+      "#....MfffffS.....rr..........rr.......rr.......#",
+      "#....MfffffM.......r.........r..~~~~~..r.......#",
+      "#....MMMMMMM~~~~~...r.......rr.~~~~~~~.rr......#",
+      "#..........~~~~~~~..r.......r..~~~~~~~..r......#",
+      "#.........~~~~~~~~~..r......r..~~~~~~~..r......#",
+      "#.........~~~~~~~~~..r......r..~~~~~~~..r......#",
+      "#.........~~~~~~~~~..r......rr.~~~~~~~.rr......#",
+      "#.........~~~~~~~~~..r.......r..~~~~~..r.......#",
+      "#.........~~~~~~~~~..r.......rr.......rr.......#",
+      "#..........~~~~~~~..r.........rr.....rr........#",
+      "#.......r...~~~~~...r..........................#",
+      "#........r.........r...........................#",
+      "#.........rr.....rr.................MMMXMMMM...#",
+      "#...........rrrrr...................MffffffM...#",
+      "#...................................MffffffM...#",
+      "#...................................MffffffM...#",
+      "#...................................MffffffMr..#",
+      "#...................................MffffffMrr.#",
+      "#...................................MMM++MMMr..#",
+      "#.........................................rrr..#",
+      "#............................,.............r...#",
+      "#.....r.....................,..................#",
+      "#....rrr.......,............,rrrr..............#",
+      "#.....r..r......,.........r,.....rr............#",
+      "#.......rrr.....,........r.,.......r...........#",
+      "#........r.......,......r.,~~~~~~~..r..........#",
+      "#................,.....r..,~~~~~~~~..r.........#",
+      "#.................,....r.,~~~~~~~~~~...........#",
+      "#..................,..r..,~~~~~~~~~~...........#",
+      "#...................,.r.,~~~~~~~~~~~...........#",
+      "#...................,.r.,~~~~~~~~~~~...........#",
+      "#.....................r..~~~~~~~~~~~...........#",
+      "#.................tttttffttttt~~~~~~...........#",
+      "#.................tfffffffffft~~~~~~...........#",
+      "#.................tfffffffffft~~~~~..r.........#",
+      "#.................tfffffffffft~~~~..r..........#",
+      "#.................tfffffffffft.....r...........#",
+      "#.................tfffffffffft...rr............#",
+      "#.................ttttttttttttrrr..............#",
+      "################################################",
+    ],
+    things: [
+      // landing base
+      ['clip', 21, 44], ['medkit', 26, 44], ['shells', 20, 42],
+      // near base
+      ['t_charger', 20, 37], ['v_shooter', 27, 36],
+      // west crater (key)
+      ['key', 14, 14], ['h_charger', 14, 12], ['v_shooter', 11, 16], ['t_shooter', 17, 17],
+      // northeast crater
+      ['h_shooter', 34, 12], ['rockets', 34, 13], ['medkit', 33, 11],
+      // south crater
+      ['t_shooter', 30, 38], ['v_charger', 31, 40], ['shells', 29, 36],
+      // lander (exit)
+      ['h_charger', 39, 23], ['clip', 42, 24],
+      // open regolith
+      ['v_shooter', 22, 20], ['h_shooter', 18, 28], ['t_shooter', 30, 32],
+      ['ship', 22, 26], ['ship', 40, 33], ['lander', 5, 20],
+      // secret: crashed ship
+      ['chaingun', 8, 7], ['clip', 6, 6], ['clip', 10, 6], ['medkit', 8, 9],
+    ],
+  },
+];
+
 
 /* ---------------- entities ---------------- */
 const WEAPONS = [
@@ -760,25 +1569,58 @@ let enemies = [], items = [], projectiles = [], particles = [], msgs = [];
 let stats = null;
 let screenShake = 0, flashRed = 0, flashYellow = 0, muzzleLight = 0;
 
-function spawnEnemy(type, x, y){
+const ENEMY_KINDS = {
+  t_shooter: ['shooter', 'trump'],  t_charger: ['charger', 'trump'],
+  v_shooter: ['shooter', 'vance'],  v_charger: ['charger', 'vance'],
+  h_shooter: ['shooter', 'hegseth'],h_charger: ['charger', 'hegseth'],
+};
+// scenery billboards per level (r = blocking radius, hs = screen height in tiles)
+const PROP_DEFS = {
+  tree:   { spr: 'tree',   hs: 2.6, r: 0.30 },
+  treed:  { spr: 'treed',  hs: 2.2, r: 0.28 },   // dead tree
+  well:   { spr: 'well',   hs: 0.9, r: 0.45 },
+  ship:   { spr: 'ship',   hs: 3.2, r: 0.20 },
+  lander: { spr: 'lander', hs: 2.6, r: 0.55 },
+  plant:  { spr: 'plant',  hs: 0.9, r: 0.22 },
+  crate:  { spr: 'crate',  hs: 0.8, r: 0.34 },
+};
+function spawnEnemy(type, skin, x, y){
+  const beef = skin === 'vance' ? 1.3 : skin === 'hegseth' ? 1.15 : 1;   // Vance tanks, Hegseth jock
   enemies.push({
-    type, x, y, r: 0.32,
-    hp: type === 'shooter' ? 60 : 40,
-    speed: type === 'shooter' ? 1.7 : 2.7,
+    type, skin, x, y, r: 0.32,
+    hp: Math.round((type === 'shooter' ? 60 : 40) * beef),
+    speed: type === 'shooter' ? 1.7 : 2.7 * (skin === 'hegseth' ? 1.2 : 1),
     state: 'sleep', timer: 0, cool: rand(0.6, 1.6),
     animT: rand(0, 1), dyingT: 0
   });
 }
-function resetGame(){
+function loadLevel(idx){
+  curLevel = clamp(idx, 0, LEVELS.length - 1);
+  LVL = LEVELS[curLevel];
+  LVL.tex = LVL.texOf();                 // tile -> wall texture
+  LVL.floorT = LVL.floorTexs();          // fgrid index -> floor texture
+  LVL.ceilT = LVL.ceilTexs();            // cgrid index -> ceiling texture
+  LVL.skyTex = LVL.sky === 'night' ? TEX.skyNight : LVL.sky === 'moon' ? TEX.skyMoon : null;
   buildMap();
+}
+function resetGame(){
+  loadLevel(curLevel);
   enemies = []; items = []; projectiles = []; particles = []; msgs = [];
-  stats = { kills: 0, items: 0, secrets: 0, time: 0, totalKills: 0, totalItems: 0, totalSecrets: secretTotalTiles, par: 100 };
-  for (const [kind, x, y] of THINGS) {
-    const px_ = x + 0.5, py_ = y + 0.5;
-    if (kind === 'player') { player.x = px_; player.y = py_; continue; }
-    if (kind === 't_shooter') { spawnEnemy('shooter', px_, py_); stats.totalKills++; continue; }
-    if (kind === 't_charger') { spawnEnemy('charger', px_, py_); stats.totalKills++; continue; }
-    items.push({ kind, x: px_, y: py_, taken: false, bob: rand(0, TAU) });
+  stats = { kills: 0, items: 0, secrets: 0, time: 0, totalKills: 0, totalItems: 0,
+    totalSecrets: secretTotalTiles, par: LVL.par, finalTime: 0 };
+  player.x = LVL.spawn[0] + 0.5; player.y = LVL.spawn[1] + 0.5;
+  if (qPos) { player.x = qPos[0]; player.y = qPos[1]; }
+  for (const th of LVL.things) {
+    const kind = th[0], x = th[1], y = th[2];
+    const ek = ENEMY_KINDS[kind];
+    if (ek) { spawnEnemy(ek[0], ek[1], x + 0.5, y + 0.5); stats.totalKills++; continue; }
+    const pr = PROP_DEFS[kind];
+    if (pr) { props.push({ kind, x: x + 0.5, y: y + 0.5, r: pr.r, hs: pr.hs, spr: pr.spr, bob: rand(0, TAU) }); continue; }
+    if (kind === 'stairs') {
+      stairLinks.set(y * MAPW + x, [th[3], th[4]]);
+      continue;
+    }
+    items.push({ kind, x: x + 0.5, y: y + 0.5, taken: false, bob: rand(0, TAU) });
     stats.totalItems++;
   }
   player.health = 100; player.armor = 0;
@@ -786,8 +1628,8 @@ function resetGame(){
   player.weapons = [true, false, false, false, false];
   player.weapon = 1; player.wstate = 'ready'; player.wt = 0; player.atkT = 99;
   player.bob = 0; player.bobAmp = 0; player.painT = 0; player.pendingWeapon = -1; player.nextWeapon = 1;
-  player.dead = false; player.deathT = 0; player.keyRed = false;
-  player.ang = -Math.PI / 2;
+  player.dead = false; player.deathT = 0; player.keyRed = false; player.tpLock = -1;
+  player.ang = qAng !== null ? qAng : (LVL.spawn[2] !== undefined ? LVL.spawn[2] : -Math.PI / 2);
   flashRed = 0; flashYellow = 0; screenShake = 0; muzzleLight = 0;
   showAutomap = false;
 }
@@ -807,8 +1649,27 @@ function buildAssets(){
   floorTexG.data = floorTexGen();
   ceilTexG.data = ceilTexGen();
 
-  SPR.trumpShooter = trumpSpriteSet('shooter');
-  SPR.trumpCharger = trumpSpriteSet('charger');
+  // named texture registry (levels' texOf()/floorTexs()/ceilTexs() reference these)
+  TEX.stone = wallTex[0]; TEX.brick = wallTex[1]; TEX.moss = wallTex[2]; TEX.tech = wallTex[3];
+  TEX.door = wallTex[4]; TEX.doorL = wallTex[5]; TEX.exit = wallTex[6]; TEX.pillar = wallTex[7];
+  TEX.wood = woodTex(false); TEX.woodDark = woodTex(true); TEX.rock = rockTex();
+  TEX.metal = metalTex(); TEX.hull = TEX.metal; TEX.window = windowTex();
+  TEX.table = tableTex(); TEX.desk = deskTex(); TEX.techDark = techDarkTex();
+  TEX.elevDoor = elevDoorTex(); TEX.lift = liftTex();
+  TEX.floor = floorTexG.data; TEX.ceil = ceilTexG.data;
+  TEX.grass = grassTex(); TEX.dirt = dirtTex(); TEX.water = waterTex(); TEX.planks = planksTex();
+  TEX.gloss = glossTex(); TEX.carpet = carpetTex(); TEX.ctile = ctileTex(); TEX.marble = marbleTex();
+  TEX.regolith = regolithTex(); TEX.track = trackTex(); TEX.pit = pitTex(); TEX.deck = deckTex();
+  TEX.beams = beamsTex(); TEX.oceil = oceilTex(); TEX.lceil = lceilTex(); TEX.hullceil = hullceilTex();
+  TEX.skyNight = skyNightTex(); TEX.skyMoon = skyMoonTex();
+
+  SPR.props = {
+    tree: treeSpr(false), treed: treeSpr(true), well: wellSpr(),
+    ship: shipSpr(), lander: landerSpr(), plant: plantSpr(), crate: crateSpr(),
+  };
+  SPR.fig = {};
+  for (const skin of ['trump', 'vance', 'hegseth'])
+    SPR.fig[skin] = { shooter: trumpSpriteSet('shooter', skin), charger: trumpSpriteSet('charger', skin) };
   SPR.bolt = boltSpr();
   SPR.rocketProj = rocketProjSpr();
   SPR.explosion = [explosionSpr(0), explosionSpr(1), explosionSpr(2)];
@@ -835,6 +1696,10 @@ function circleHitsWall(x, y, r){
         const cx = clamp(x, tx, tx + 1), cy = clamp(y, ty, ty + 1);
         if ((x - cx) * (x - cx) + (y - cy) * (y - cy) < r * r) return true;
       }
+  for (const p of props) {                     // scenery (trees, wells, ships...) blocks movement
+    const dx = x - p.x, dy = y - p.y, rr = r + p.r;
+    if (dx * dx + dy * dy < rr * rr) return true;
+  }
   return false;
 }
 function moveBody(a, dx, dy, r){
@@ -986,6 +1851,16 @@ function updatePlayer(dt){
     player.bobAmp = Math.min(1, player.bobAmp + dt * 5);
     player.bob += dt * 9 * run;
   } else player.bobAmp = Math.max(0, player.bobAmp - dt * 5);
+  // teleport pads (office elevator between floors)
+  const cellHere = Math.floor(player.y) * MAPW + Math.floor(player.x);
+  if (stairLinks.has(cellHere)) {
+    const [tx, ty] = stairLinks.get(cellHere);
+    if (player.tpLock !== cellHere && !solidAt(tx, ty)) {
+      player.x = tx + 0.5; player.y = ty + 0.5;
+      player.tpLock = ty * MAPW + tx;
+      S.pickup(); addMsg('ELEVATOR.');
+    }
+  } else player.tpLock = -1;
   // pending weapon switch
   if (player.pendingWeapon >= 0 && player.wstate === 'ready') {
     player.nextWeapon = player.pendingWeapon; player.pendingWeapon = -1;
@@ -1224,16 +2099,21 @@ function damagePlayer(dmg){
 /* ---------------- renderer ---------------- */
 function lightAt(d){
   let l = settings.brightness * 1.35 / (1 + d * 0.2) + muzzleLight * 0.55 / (1 + d * 0.5);
+  l *= (LVL && LVL.ambient) || 1;                  // per-level ambience (dark woods, bright office)
   return (clamp(l, 0.05, 1) * 255) | 0;
 }
 function shadePx(c, f){
   const r = ((c & 255) * f) >> 8, g = (((c >>> 8) & 255) * f) >> 8, b = (((c >>> 16) & 255) * f) >> 8;
   return 0xff000000 | (b << 16) | (g << 8) | r;
 }
+let skyCol = new Uint16Array(1);   // per-column sky texture offset, filled by castWalls
 function castWalls(cam, horizon, dirX, dirY, plX, plY){
+  if (skyCol.length !== W) skyCol = new Uint16Array(W);
   for (let x = 0; x < W; x++) {
     const camX = 2 * x / W - 1;
     const rdx = dirX + plX * camX, rdy = dirY + plY * camX;
+    // sky repeats every 90 degrees of view (classic Doom style — keeps art unstretched)
+    skyCol[x] = (((Math.atan2(rdy, rdx) / (Math.PI / 2)) * SKYW) | 0) & (SKYW - 1);
     let mapX = Math.floor(cam.x), mapY = Math.floor(cam.y);
     const ddx = Math.abs(1 / rdx), ddy = Math.abs(1 / rdy);
     let stepX, stepY, sdx, sdy;
@@ -1258,7 +2138,7 @@ function castWalls(cam, horizon, dirX, dirY, plX, plY){
     let wallX, texX;
     if (side === 0) { wallX = cam.y + dist * rdy; texX = ((wallX - Math.floor(wallX)) * 64) | 0; if (rdx > 0) texX = 63 - texX; }
     else            { wallX = cam.x + dist * rdx; texX = ((wallX - Math.floor(wallX)) * 64) | 0; if (rdy < 0) texX = 63 - texX; }
-    const tex = wallTex[WALL_TEXIDX[tile] || 0];
+    const tex = LVL.tex[tile] || LVL.tex[1] || wallTex[0];
     const lineH = H / dist;
     const dsF = horizon - lineH * 0.5;
     const y0 = Math.max(0, Math.ceil(dsF + doorF * lineH));
@@ -1282,7 +2162,7 @@ function castWalls(cam, horizon, dirX, dirY, plX, plY){
 function castFloors(cam, horizon, dirX, dirY, plX, plY){
   const rdx0 = dirX - plX, rdy0 = dirY - plY, rdx1 = dirX + plX, rdy1 = dirY + plY;
   const posZ = 0.5 * H;
-  const fTex = floorTexG.data, cTex = ceilTexG.data;
+  const fTexs = LVL.floorT, cTexs = LVL.ceilT, skyTex = LVL.skyTex;
   for (let y = horizon + 1; y < H; y++) {         // floor
     const rowDist = posZ / (y - horizon);
     const stepX = rowDist * (rdx1 - rdx0) / W, stepY = rowDist * (rdy1 - rdy0) / W;
@@ -1291,27 +2171,40 @@ function castFloors(cam, horizon, dirX, dirY, plX, plY){
     let idx = y * W;
     for (let x = 0; x < W; x++) {
       if (y < wallBot[x]) { fx += stepX; fy += stepY; continue; }   // wall covers this pixel
+      const cx = clamp(fx | 0, 0, MAPW - 1), cy = clamp(fy | 0, 0, MAPH - 1);
+      const tex = fTexs[Math.min(fgrid[cy * MAPW + cx], fTexs.length - 1)];
       const tx = ((fx * 64) | 0) & 63, ty = ((fy * 64) | 0) & 63;
-      fb32[idx + x] = shadePx(fTex[(ty << 6) + tx], f);
+      fb32[idx + x] = shadePx(tex[(ty << 6) + tx], f);
       fx += stepX; fy += stepY;
     }
   }
+  const skyShade = 235;
   for (let y = horizon - 1; y >= 0; y--) {        // ceiling
     const rowDist = posZ / (horizon - y);
     const stepX = rowDist * (rdx1 - rdx0) / W, stepY = rowDist * (rdy1 - rdy0) / W;
     let fx = cam.x + rowDist * rdx0, fy = cam.y + rowDist * rdy0;
     const f = lightAt(rowDist);
+    // angular row mapping, same px-per-radian as the column mapping — keeps moon/Earth round
+    const projDist = (W / 2) / Math.hypot(plX, plY);
+    const skyY = Math.max(0, Math.min(SKYH - 1, ((SKYH / 2 - Math.atan((horizon - y) / projDist) * SKYK) | 0)));
     let idx = y * W;
     for (let x = 0; x < W; x++) {
       if (y >= wallTop[x]) { fx += stepX; fy += stepY; continue; }   // wall covers this pixel
-      const tx = ((fx * 64) | 0) & 63, ty = ((fy * 64) | 0) & 63;
-      fb32[idx + x] = shadePx(cTex[(ty << 6) + tx], f);
+      const cx = clamp(fx | 0, 0, MAPW - 1), cy = clamp(fy | 0, 0, MAPH - 1);
+      const ci = cgrid[cy * MAPW + cx];
+      if (ci < 0)                                 // open sky
+        fb32[idx + x] = shadePx(skyTex[skyY * SKYW + skyCol[x]], skyShade);
+      else {
+        const tex = cTexs[Math.min(ci, cTexs.length - 1)];
+        const tx = ((fx * 64) | 0) & 63, ty = ((fy * 64) | 0) & 63;
+        fb32[idx + x] = shadePx(tex[(ty << 6) + tx], f);
+      }
       fx += stepX; fy += stepY;
     }
   }
 }
 function enemySprite(e){
-  const set = e.type === 'shooter' ? SPR.trumpShooter : SPR.trumpCharger;
+  const set = SPR.fig[e.skin][e.type];
   if (state === ST_SPLASH) return set.walk[((demoT * 6 + e.animT * 4) | 0) % 4];
   switch (e.state) {
     case 'sleep':  return set.walk[1];
@@ -1327,6 +2220,8 @@ function drawSprites(cam, horizon, dirX, dirY, plX, plY){
   const list = [];
   for (const e of enemies)
     list.push({ x: e.x, y: e.y, spr: enemySprite(e), hs: 0.95, z0: 0, d2: (e.x-cam.x)**2 + (e.y-cam.y)**2 });
+  for (const p of props)
+    list.push({ x: p.x, y: p.y, spr: SPR.props[p.spr], hs: p.hs, z0: 0, d2: (p.x-cam.x)**2 + (p.y-cam.y)**2 });
   for (const it of items)
     if (!it.taken)
       list.push({ x: it.x, y: it.y, spr: SPR.pickups[it.kind], hs: 0.5,
@@ -1504,6 +2399,7 @@ function drawAutomap(){
     let col = '#8a8a98';
     if (t === T_DOOR) col = '#c9a227';
     else if (t === T_DOORL) col = '#c0272d';
+    else if (t === T_LIFT) col = '#ffd24a';
     else if (t === T_SECRET) col = doorAt(x, y).used ? '#e050e0' : '#4a4a52';
     else if (t === T_EXIT) col = '#3dff70';
     ctx.fillStyle = col;
@@ -1514,13 +2410,15 @@ function drawAutomap(){
   ctx.fillStyle = '#e03030';
   for (const e of enemies)
     if (e.state !== 'sleep' && e.state !== 'dead') ctx.fillRect(ox + e.x * sc - 1, oy + e.y * sc - 1, 3, 3);
+  ctx.fillStyle = '#2c6a34';
+  for (const p of props) ctx.fillRect(ox + p.x * sc - 1, oy + p.y * sc - 1, 3, 3);
   ctx.strokeStyle = '#40ff70'; ctx.lineWidth = 1; ctx.beginPath();
   const hx = ox + player.x * sc, hy = oy + player.y * sc;
   ctx.moveTo(hx + Math.cos(player.ang) * 7, hy + Math.sin(player.ang) * 7);
   ctx.lineTo(hx + Math.cos(player.ang + 2.5) * 5, hy + Math.sin(player.ang + 2.5) * 5);
   ctx.lineTo(hx + Math.cos(player.ang - 2.5) * 5, hy + Math.sin(player.ang - 2.5) * 5);
   ctx.closePath(); ctx.stroke();
-  txt('AUTOMAP', W / 2, oy - 10, 10, '#9a9aa8', 'center');
+  txt(`AUTOMAP — ${LVL.name}`, W / 2, oy - 10, 10, '#9a9aa8', 'center');
   txt('RED = KEYCARD DOOR   GREEN = EXIT', W / 2, oy + MAPH * sc + 10, 8, '#8a8a96', 'center');
 }
 
@@ -1577,11 +2475,14 @@ const HELP_LINES = [
   ['AUTOMAP', 'TAB'],
   ['MENU / PAUSE', 'ESC'],
   ['', ''],
-  ['THE DUNGEON', ''],
-  ['SOME TRUMPS FIRE BACK. SOME JUST CHARGE.', ''],
-  ['FIND THE RED KEYCARD TO OPEN THE LOCKED DOOR.', ''],
-  ['THERE IS A SECRET WALL SOMEWHERE...', ''],
-  ['FLIP THE EXIT SWITCH TO WIN.', ''],
+  ['THE ENEMY', ''],
+  ['TRUMPS FIRE BOLTS AND CHARGE. VANCES ARE TOUGHER.', ''],
+  ['HEGSETHS ARE ANGRY AND FAST. WATCH THE CHARGERS.', ''],
+  ['', ''],
+  ['FOUR LEVELS: THE DUNGEON, HAUNTED WOODS,', ''],
+  ['TOWER OF POWER AND SEA OF TRANQUILITY.', ''],
+  ['FIND KEYS, OPEN SECRETS, FLIP THE EXIT SWITCH.', ''],
+  ['ELEVATOR PADS TELEPORT BETWEEN OFFICE FLOORS.', ''],
 ];
 function drawHelp(){
   const lw = Math.max(300, W * 0.8), lh = HELP_LINES.length * 13 + 36;
@@ -1600,7 +2501,7 @@ function drawSplash(){
   const cx = W / 2, big = Math.max(24, W / 9 | 0);
   txt('TRUMP', cx, H * 0.2, big, '#f6d64b', 'center', true);
   txt('DOOM', cx, H * 0.2 + big * 1.05, big, '#e03030', 'center', true);
-  txt('~ THE ANGRY ARMY OF YELLOW-HAIRED DONALD TRUMPS AWAITS ~', cx, H * 0.2 + big * 2.1, Math.max(7, W / 60 | 0), '#b8b8c4', 'center');
+  txt('~ THE ANGRY ARMY AWAITS: TRUMPS, VANCES & HEGSETHS ACROSS 4 LEVELS ~', cx, H * 0.2 + big * 2.1, Math.max(7, W / 60 | 0), '#b8b8c4', 'center');
   if (((demoT * 1.6 | 0) % 2 === 0)) txt('PRESS ENTER TO PLAY', cx, H * 0.62, Math.max(10, W / 34 | 0), '#ffe890', 'center', true);
   txt('O = OPTIONS     H = HELP / CONTROLS', cx, H * 0.72, Math.max(7, W / 52 | 0), '#9a9aa8', 'center');
   txt('A SILLY PARODY. NO REAL PERSON APPEARS IN THIS GAME.', cx, H - 10, Math.max(6, W / 64 | 0), '#6a6a74', 'center');
@@ -1616,7 +2517,7 @@ function drawDead(){
 function drawWin(){
   ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0, 0, W, H);
   const cx = W / 2;
-  txt('LEVEL CLEARED!', cx, H * 0.24, Math.max(14, W / 18 | 0), '#ffe890', 'center', true);
+  txt(`${LVL.name} CLEARED!`, cx, H * 0.24, Math.max(14, W / 18 | 0), '#ffe890', 'center', true);
   const pct = (n, t) => t > 0 ? `${(100 * n / t) | 0}%` : '100%';
   const rows = [
     `KILLS      ${stats.kills}/${stats.totalKills}   ${pct(stats.kills, stats.totalKills)}`,
@@ -1627,14 +2528,15 @@ function drawWin(){
   ];
   rows.forEach((r, i) => txt(r, cx, H * 0.38 + i * 14, Math.max(8, W / 44 | 0), '#e8e8e8', 'center'));
   if (((performance.now() / 300 | 0) % 2 === 0))
-    txt('PRESS ENTER FOR TITLE', cx, H * 0.78, Math.max(9, W / 34 | 0), '#ffe890', 'center', true);
+    txt(curLevel + 1 < LEVELS.length ? 'PRESS ENTER FOR NEXT LEVEL' : 'PRESS ENTER FOR TITLE',
+      cx, H * 0.78, Math.max(9, W / 34 | 0), '#ffe890', 'center', true);
 }
 
 /* ---------------- key dispatch ---------------- */
 function startGame(){
   initAudio(); resumeAudio(); resetGame();
   state = ST_PLAY; startMusic(); S.splashGo();
-  addMsg('FIND THE RED KEYCARD. FLIP THE EXIT SWITCH.');
+  addMsg(LVL.intro);
 }
 function closeOptions(){ state = optionsFrom; S.menuMove(); }
 function pauseSelect(){
@@ -1681,7 +2583,10 @@ function handleKeyGlobal(code){
       if (code === 'Enter') startGame();
       break;
     case ST_WIN:
-      if (code === 'Enter') { state = ST_SPLASH; stopMusic(); }
+      if (code === 'Enter') {
+        if (curLevel + 1 < LEVELS.length) { curLevel++; startGame(); }   // next level
+        else { state = ST_SPLASH; stopMusic(); }
+      }
       break;
   }
 }
@@ -1725,6 +2630,7 @@ function renderFrame(){
     if (state === ST_DEAD) drawDead();
     if (state === ST_WIN) drawWin();
     drawHUD();
+    if (sprdbg && state === ST_PLAY) drawSpriteDebug();
     if (state === ST_PLAY) { drawMessages(); }
     if (state === ST_OPTIONS || state === ST_HELP) {
       ctx.fillStyle = 'rgba(0,0,0,0.72)'; ctx.fillRect(0, 0, W, H);
@@ -1741,13 +2647,39 @@ function frame(t){
   renderFrame();
 }
 
+/* ---------------- dev-only sprite sheet overlay (?sprites) ---------------- */
+let sprdbg = false;
+function spriteDebug(){
+  startGame(); sprdbg = true;
+}
+function drawSpriteDebug(){
+  let x = 10;
+  for (const skin of ['trump', 'vance', 'hegseth']) {
+    for (const [vt, f] of [['shooter', 'aim'], ['charger', 'w1']]) {
+      const s = f === 'w1' ? SPR.fig[skin][vt].walk[1] : SPR.fig[skin][vt][f];
+      const [c, g] = cvs(s.w, s.h);
+      g.putImageData(new ImageData(new Uint8ClampedArray(s.data.buffer), s.w, s.h), 0, 0);
+      ctx.fillStyle = '#404048'; ctx.fillRect(x, 40, s.w * 1.2, s.h * 1.2);
+      ctx.drawImage(c, x, 40, s.w * 1.2, s.h * 1.2);
+      txt(`${skin} ${vt}/${f}`, x, 128, 8, '#ffe890', 'left');
+      x += s.w * 1.2 + 10;
+    }
+  }
+}
 /* ---------------- self test (?selftest — dev only) ---------------- */
-function bfsReach(openDoors){
+function bfsAll(openDoors){
   if (openDoors) for (const d of doors.values()) { d.open = 1; d.state = 2; }
   const seen = new Uint8Array(MAPW * MAPH);
-  const q = [[7, 43]]; seen[43 * MAPW + 7] = 1;
+  const sx = Math.floor(LVL.spawn[0]), sy = Math.floor(LVL.spawn[1]);
+  const q = [[sx, sy]]; seen[sy * MAPW + sx] = 1;
   while (q.length) {
     const [x, y] = q.pop();
+    const i0 = y * MAPW + x;
+    if (stairLinks.has(i0)) {          // teleport pads connect the two floors
+      const [tx, ty] = stairLinks.get(i0);
+      const ti = ty * MAPW + tx;
+      if (!seen[ti] && !solidAt(tx, ty)) { seen[ti] = 1; q.push([tx, ty]); }
+    }
     for (const [ox, oy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = x + ox, ny = y + oy;
       if (nx < 0 || ny < 0 || nx >= MAPW || ny >= MAPH) continue;
@@ -1761,22 +2693,26 @@ function bfsReach(openDoors){
 function runSelfTest(){
   const out = [];
   const ok = (name, cond) => out.push((cond ? 'PASS' : 'FAIL') + ' ' + name);
-  let bad = 0;
-  for (const [k, x, y] of THINGS) if (solidAt(x, y)) bad++;
-  ok('things on walkable tiles', bad === 0);
-  // closed-map reachability: start area + key vault open, secret & exit sealed
-  let s = bfsReach(false);
+  // ---- per-level structural checks ----
+  for (let li = 0; li < LEVELS.length; li++) {
+    curLevel = li; resetGame();        // loads level li
+    let bad = 0;
+    for (const th of LVL.things) if (solidAt(th[1], th[2])) bad++;
+    ok(`L${li + 1} things on walkable tiles`, bad === 0);
+    const skins = new Set(LVL.things.filter(t => ENEMY_KINDS[t[0]]).map(t => ENEMY_KINDS[t[0]][1]));
+    ok(`L${li + 1} has trump/vance/hegseth`, skins.has('trump') && skins.has('vance') && skins.has('hegseth'));
+    let s = bfsAll(true);
+    let unreachable = 0;
+    for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++)
+      if (!solidAt(x, y) && !s[y * MAPW + x]) unreachable++;
+    ok(`L${li + 1} no unreachable floor with doors open`, unreachable === 0);
+  }
+  // ---- level-1 gameplay tests (the dungeon) ----
+  curLevel = 0; resetGame();
+  let s = bfsAll(false);
   ok('key vault reachable (closed map)', s[33 * MAPW + 42] === 1);
   ok('exit chamber sealed (closed map)', s[5 * MAPW + 12] === 0);
   ok('secret cache sealed (closed map)', s[16 * MAPW + 43] === 0);
-  // open-map reachability: every walkable tile reachable (no leaks)
-  s = bfsReach(true);
-  let unreachable = 0;
-  for (let y = 0; y < MAPH; y++) for (let x = 0; x < MAPW; x++)
-    if (!solidAt(x, y) && !s[y * MAPW + x]) unreachable++;
-  ok('no unreachable floor with doors open', unreachable === 0);
-  // hitscan
-  resetGame();
   const e = enemies[0];
   player.x = e.x; player.y = e.y - 4; player.ang = Math.PI / 2;
   const hp0 = e.hp;
@@ -1810,6 +2746,15 @@ function runSelfTest(){
 function init(){
   applyRes();
   buildAssets();
+  // ?level=N starts on level N (1-based); must run before the first resetGame
+  try {
+    const lm = location.search.match(/level=(\d+)/);
+    if (lm) curLevel = clamp(+lm[1] - 1, 0, LEVELS.length - 1);
+    const am = location.search.match(/ang=(-?[\d.]+)/);
+    if (am) qAng = parseFloat(am[1]);
+    const pm = location.search.match(/pos=([\d.]+),([\d.]+)/);
+    if (pm) qPos = [+pm[1], +pm[2]];
+  } catch (e) {}
   resetGame();
   state = ST_SPLASH;
   requestAnimationFrame(frame);
@@ -1821,6 +2766,7 @@ function init(){
     if (q.includes('selftest')) setTimeout(() => { startGame(); runSelfTest(); }, 800);
     if (q.includes('menu=options')) { optionsFrom = ST_SPLASH; state = ST_OPTIONS; }
     if (q.includes('menu=help')) { optionsFrom = ST_SPLASH; state = ST_HELP; }
+    if (q.includes('sprites')) setTimeout(spriteDebug, 900);   // enemy-skin sheet overlay
   } catch (e) {}
 }
 init();
